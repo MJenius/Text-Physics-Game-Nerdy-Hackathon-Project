@@ -6,7 +6,17 @@ export type TelemetryEventType =
   | 'CHALLENGE_RESET'
   | 'REREAD_TRIGGERED'
   | 'CHALLENGE_COMPLETE'
-  | 'WORLD_COMPLETE';
+  | 'WORLD_COMPLETE'
+  // Phase 2 events
+  | 'PROFILE_SELECTED'
+  | 'READING_LEVEL_SELECTED'
+  | 'PASSAGE_GENERATION_STARTED'
+  | 'PASSAGE_GENERATION_SUCCESS'
+  | 'PASSAGE_GENERATION_FALLBACK'
+  | 'HINT_SHOWN'
+  | 'HINT_USED'
+  | 'SKILL_UPDATED'
+  | 'DIFFICULTY_ADJUSTED';
 
 export interface TelemetryEvent {
   type: TelemetryEventType;

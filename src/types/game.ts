@@ -67,6 +67,8 @@ export interface Challenge {
   ruleIds: string[];
   completionCondition: Predicate[];
   completedMessage: string;
+  /** Phase 2: AI-adapted passage for the current learner profile */
+  adaptedPassage?: import('./learner').GeneratedPassage | null;
 }
 
 export interface WorldState {

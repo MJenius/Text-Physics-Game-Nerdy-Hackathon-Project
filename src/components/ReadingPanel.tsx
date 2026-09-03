@@ -1,6 +1,10 @@
 import React from 'react';
 import { useGameStore } from '../engine/GameStore';
-import { BookOpen, RefreshCw, Sparkles, CheckCircle } from 'lucide-react';
+import { useLearnerStore } from '../engine/LearnerStore';
+import { HintButton } from './HintButton';
+import { getPersonalizedRereadingPrompt } from '../engine/HintService';
+import { SKILL_KEY_MAP } from '../types/learner';
+import { BookOpen, RefreshCw, Sparkles, CheckCircle, Cpu, Loader2, Bookmark } from 'lucide-react';
 
 export const ReadingPanel: React.FC = () => {
   const {
@@ -8,11 +12,26 @@ export const ReadingPanel: React.FC = () => {
     currentChallengeIndex,
     rereadCount,
     recordReread,
-    lastFeedback
+    lastFeedback,
+    lastAction,
+    failedAttempts,
+    isPassageGenerating,
   } = useGameStore();
 
-  const passage = currentChallenge.passage;
+  const { profile } = useLearnerStore();
+
+  // Prefer adapted passage if available, else original passage
+  const adapted = currentChallenge.adaptedPassage;
+  const passageTitle = adapted?.title || currentChallenge.passage.heading;
+  const passageSource = adapted?.source || currentChallenge.passage.source;
+  const paragraphs = adapted?.paragraphs || currentChallenge.passage.paragraphs;
+  const targetVocab = adapted?.targetVocabulary || currentChallenge.passage.keyClues || [];
+
   const isFeedbackFailure = lastFeedback.type === 'failure';
+  const skillKey = SKILL_KEY_MAP[currentChallenge.targetReadingSkill] || 'literalRetrieval';
+  const personalizedNudge = profile
+    ? getPersonalizedRereadingPrompt(skillKey, profile.audience)
+    : 'Notice the key rule in the text: consult the highlighted conditions before repeating your interaction.';
 
   const skillLabels: Record<string, string> = {
     literal_retrieval: 'Literal Retrieval',
@@ -24,8 +43,8 @@ export const ReadingPanel: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-900/90 border-r border-slate-800 p-6 backdrop-blur-md shadow-2xl overflow-y-auto">
-      {/* Header */}
+    <div className="flex flex-col h-full bg-slate-900/90 border-r border-slate-800 p-6 backdrop-blur-md shadow-2xl overflow-y-auto select-none">
+      {/* Top Header */}
       <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-800/80 shrink-0">
         <div className="flex items-center gap-2 text-amber-400">
           <BookOpen className="w-5 h-5" />
@@ -33,82 +52,132 @@ export const ReadingPanel: React.FC = () => {
             Field Journal & Discovery Log
           </span>
         </div>
-        <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-amber-950/60 text-amber-300 border border-amber-800/60 font-semibold">
-          Stage {currentChallengeIndex + 1} of 6
-        </span>
-      </div>
 
-      {/* Entry Title & Source */}
-      <div className="mb-4 shrink-0">
-        <h2 className="text-xl font-serif font-bold text-amber-200/95 tracking-wide">
-          {passage.heading}
-        </h2>
-        <p className="text-xs text-slate-400 italic mt-1 font-serif">
-          {passage.source}
-        </p>
-      </div>
-
-      {/* Passage Content Card */}
-      <div
-        className={`relative p-5 rounded-xl border transition-all duration-300 ${
-          isFeedbackFailure
-            ? 'bg-amber-950/25 border-amber-500/50 shadow-[0_0_24px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40'
-            : 'bg-slate-950/45 border-slate-800/80'
-        }`}
-      >
-        <div className="space-y-3.5 text-slate-200 text-sm leading-relaxed font-serif">
-          {passage.paragraphs.map((p, idx) => (
-            <p key={idx} className="tracking-wide">
-              {p}
-            </p>
-          ))}
-        </div>
-
-        {/* Dynamic Clue Prompt on Failure */}
-        {isFeedbackFailure && (
-          <div className="mt-4 pt-3.5 border-t border-amber-500/25 flex items-start gap-2 text-xs text-amber-300 font-sans animate-in fade-in">
-            <Sparkles className="w-4 h-4 text-amber-400 animate-pulse shrink-0 mt-0.5" />
-            <span className="leading-snug">
-              Notice the key rule in the text: consult the highlighted conditions before repeating your interaction.
+        <div className="flex items-center gap-2">
+          {/* Reading Level Badge */}
+          {profile && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-800/60 font-semibold capitalize flex items-center gap-1">
+              {adapted?.isAIGenerated && <Cpu className="w-3 h-3 text-cyan-400" />}
+              {profile.audience} • {profile.readingDifficulty}
             </span>
-          </div>
-        )}
-      </div>
+          )}
 
-      {/* Reread / Focus Nudge */}
-      <div className="mt-5 flex items-center justify-between pt-3 border-t border-slate-800/60 shrink-0">
-        <button
-          onClick={recordReread}
-          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 bg-slate-800/60 hover:bg-slate-800 hover:text-amber-300 border border-slate-700 transition-colors cursor-pointer"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          Review Passage Notes
-        </button>
-
-        {rereadCount > 0 && (
-          <span className="text-[11px] text-slate-400 font-mono">
-            Rereads consulted: {rereadCount}
+          <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-amber-950/60 text-amber-300 border border-amber-800/60 font-semibold">
+            Stage {currentChallengeIndex + 1} of 6
           </span>
-        )}
+        </div>
       </div>
 
-      {/* Target Reading Skill Card */}
-      <div className="mt-auto pt-6 shrink-0">
-        <div className="p-3.5 rounded-xl bg-cyan-950/25 border border-cyan-900/45 text-xs text-cyan-200/90 shadow-sm">
-          <div className="flex items-center justify-between mb-1">
-            <span className="font-semibold text-cyan-300 uppercase tracking-wider text-[10px] font-mono">
-              Target Reading Skill
-            </span>
-            <CheckCircle className="w-3.5 h-3.5 text-cyan-400" />
-          </div>
-          <div className="font-medium text-slate-200 mb-1">
-            {skillLabels[currentChallenge.targetReadingSkill] || currentChallenge.targetReadingSkill}
-          </div>
-          <p className="text-[11px] text-slate-400 leading-normal">
-            The game world operates on deterministic laws directly encoded in this passage. No external guessing is needed.
+      {/* Loading state for dynamic AI generation */}
+      {isPassageGenerating ? (
+        <div className="my-auto py-12 flex flex-col items-center justify-center text-center">
+          <Loader2 className="w-8 h-8 text-amber-400 animate-spin mb-3" />
+          <h3 className="text-sm font-mono font-semibold text-slate-200">
+            Adapting Passage for {profile?.audience || 'Learner'}...
+          </h3>
+          <p className="text-xs text-slate-400 max-w-xs mt-1">
+            Generating difficulty-calibrated prose preserving deterministic world rules.
           </p>
         </div>
-      </div>
+      ) : (
+        <>
+          {/* Entry Title & Source */}
+          <div className="mb-4 shrink-0">
+            <h2 className="text-xl font-serif font-bold text-amber-200/95 tracking-wide">
+              {passageTitle}
+            </h2>
+            <p className="text-xs text-slate-400 italic mt-1 font-serif">
+              {passageSource}
+            </p>
+          </div>
+
+          {/* Passage Content Card */}
+          <div
+            className={`relative p-5 rounded-xl border transition-all duration-300 ${
+              isFeedbackFailure
+                ? 'bg-amber-950/25 border-amber-500/50 shadow-[0_0_24px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40'
+                : 'bg-slate-950/45 border-slate-800/80'
+            }`}
+          >
+            <div className="space-y-3.5 text-slate-200 text-sm leading-relaxed font-serif">
+              {paragraphs.map((p, idx) => (
+                <p key={idx} className="tracking-wide">
+                  {p}
+                </p>
+              ))}
+            </div>
+
+            {/* Target Vocabulary / Key Clues chips */}
+            {targetVocab.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-mono text-slate-500 mr-1 flex items-center gap-1">
+                  <Bookmark className="w-3 h-3 text-amber-400" /> Focus terms:
+                </span>
+                {targetVocab.map((term, i) => (
+                  <span
+                    key={i}
+                    className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800/80 text-amber-200/90 border border-slate-700/80"
+                  >
+                    {term}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Dynamic Clue Prompt on Failure (Personalized) */}
+            {isFeedbackFailure && (
+              <div className="mt-4 pt-3.5 border-t border-amber-500/25 flex items-start gap-2 text-xs text-amber-300 font-sans animate-in fade-in">
+                <Sparkles className="w-4 h-4 text-amber-400 animate-pulse shrink-0 mt-0.5" />
+                <span className="leading-snug">
+                  {personalizedNudge}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Progressive Hint Component */}
+          <HintButton
+            challengeId={currentChallenge.id}
+            lastAction={lastAction}
+            hasFailedAttempt={isFeedbackFailure || failedAttempts > 0}
+          />
+
+          {/* Reread / Focus Nudge */}
+          <div className="mt-4 flex items-center justify-between pt-3 border-t border-slate-800/60 shrink-0">
+            <button
+              onClick={recordReread}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 bg-slate-800/60 hover:bg-slate-800 hover:text-amber-300 border border-slate-700 transition-colors cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Review Passage Notes
+            </button>
+
+            {rereadCount > 0 && (
+              <span className="text-[11px] text-slate-400 font-mono">
+                Rereads consulted: {rereadCount}
+              </span>
+            )}
+          </div>
+
+          {/* Target Reading Skill Card */}
+          <div className="mt-auto pt-6 shrink-0">
+            <div className="p-3.5 rounded-xl bg-cyan-950/25 border border-cyan-900/45 text-xs text-cyan-200/90 shadow-sm">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-semibold text-cyan-300 uppercase tracking-wider text-[10px] font-mono">
+                  Target Reading Skill
+                </span>
+                <CheckCircle className="w-3.5 h-3.5 text-cyan-400" />
+              </div>
+              <div className="font-medium text-slate-200 mb-1">
+                {skillLabels[currentChallenge.targetReadingSkill] || currentChallenge.targetReadingSkill}
+              </div>
+              <p className="text-[11px] text-slate-400 leading-normal">
+                The game world operates on deterministic laws directly encoded in this passage. No external guessing is needed.
+              </p>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

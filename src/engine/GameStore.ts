@@ -2,6 +2,12 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { WorldState, PlayerAction, EntityId, Challenge } from '../types/game';
 import { ALL_CHALLENGES, ALL_INITIAL_ENTITIES, ALL_INITIAL_INVENTORY, ALL_RULES } from '../content/allChallenges';
+import { ALL_SCHEMAS } from '../content/challengeSchemas';
+import { getFallbackPassage } from '../content/fallbackPassages';
+import { generatePassage, isAIAvailable } from './AIContentService';
+import { getDifficultyConstraints } from './DifficultyEngine';
+import { useLearnerStore } from './LearnerStore';
+import { SKILL_KEY_MAP, type GeneratedPassage } from '../types/learner';
 import { RuleEvaluator } from './RuleEvaluator';
 import { TelemetryService } from './Telemetry';
 
@@ -16,6 +22,8 @@ interface GameStore extends WorldState {
   rereadCount: number;
   completedChallengesCount: number;
   hasWonGame: boolean;
+  lastAction: PlayerAction | null;
+  isPassageGenerating: boolean;
 
   selectInventoryItem: (id: EntityId | null) => void;
   executeAction: (action: PlayerAction) => void;
@@ -23,6 +31,7 @@ interface GameStore extends WorldState {
   recordReread: () => void;
   advanceToNextChallenge: () => void;
   restartFullGame: () => void;
+  loadAdaptedPassage: () => Promise<void>;
 }
 
 const getInitialChallengeState = (index: number) => {
@@ -62,6 +71,47 @@ export const useGameStore = create<GameStore>()(
       rereadCount: 0,
       completedChallengesCount: 0,
       hasWonGame: false,
+      lastAction: null,
+      isPassageGenerating: false,
+
+      loadAdaptedPassage: async () => {
+        const state = get();
+        const learner = useLearnerStore.getState().profile;
+        if (!learner) return;
+
+        const challenge = state.currentChallenge;
+        const schema = ALL_SCHEMAS[challenge.id];
+        const constraints = getDifficultyConstraints(learner.audience, learner.readingDifficulty);
+
+        set((draft) => {
+          draft.isPassageGenerating = true;
+        });
+
+        let adapted: GeneratedPassage | null = null;
+
+        // Try AI first if available
+        if (isAIAvailable() && schema) {
+          try {
+            adapted = await generatePassage(schema, constraints, learner.audience, learner.readingDifficulty);
+          } catch (err) {
+            console.warn('[GameStore] AI passage generation failed, falling back:', err);
+          }
+        }
+
+        // If AI unavailable or failed, use verified fallback
+        if (!adapted) {
+          adapted = getFallbackPassage(challenge.id, learner.readingDifficulty, learner.audience, challenge.passage);
+          TelemetryService.record('PASSAGE_GENERATION_FALLBACK', challenge.id, {
+            audience: learner.audience,
+            difficulty: learner.readingDifficulty
+          });
+        }
+
+        set((draft) => {
+          draft.currentChallenge.adaptedPassage = adapted;
+          draft.isPassageGenerating = false;
+        });
+      },
 
       selectInventoryItem: (id: EntityId | null) => {
         set((state) => {
@@ -116,6 +166,7 @@ export const useGameStore = create<GameStore>()(
             state.selectedInventoryItem = null;
             state.lastFeedback = fresh.lastFeedback;
             state.readingDwellStartTime = Date.now();
+            state.lastAction = null;
             TelemetryService.record('PASSAGE_VIEW', fresh.currentChallengeId);
           } else {
             state.hasWonGame = true;
@@ -126,6 +177,8 @@ export const useGameStore = create<GameStore>()(
             });
           }
         });
+        // Load adapted passage for the new stage
+        get().loadAdaptedPassage();
       },
 
       restartFullGame: () => {
@@ -148,7 +201,9 @@ export const useGameStore = create<GameStore>()(
           state.rereadCount = 0;
           state.completedChallengesCount = 0;
           state.hasWonGame = false;
+          state.lastAction = null;
         });
+        get().loadAdaptedPassage();
       },
 
       executeAction: (action: PlayerAction) => {
@@ -201,50 +256,37 @@ export const useGameStore = create<GameStore>()(
           return true;
         });
 
-        // Find the rule that passes, or default to the first candidate for diagnostic failure feedback
-        const passingRule = relevantRules.find((r) => {
-          return r.conditions.every((c) => RuleEvaluator.checkPredicate(c, state));
-        });
-        const rule = passingRule || relevantRules[0];
+        // Categorize rules:
+        // "Success" rules have a meaningful onSuccess (feedbackMessage or effects).
+        // "Failure detection" rules have empty onSuccess and describe a bad-state
+        // whose diagnostic message lives in onFailure.
+        const successRules = relevantRules.filter(
+          (r) => r.onSuccess.feedbackMessage || r.onSuccess.effects.length > 0
+        );
+        const failureDetectionRules = relevantRules.filter(
+          (r) => !r.onSuccess.feedbackMessage && r.onSuccess.effects.length === 0
+        );
+
+        // 1. Try to find a success rule whose conditions all pass
+        const passingSuccessRule = successRules.find((r) =>
+          r.conditions.every((c) => RuleEvaluator.checkPredicate(c, state))
+        );
+
+        // 2. If no success, find a failure-detection rule whose bad-state conditions match
+        const matchingFailureRule = !passingSuccessRule
+          ? failureDetectionRules.find((r) =>
+              r.conditions.every((c) => RuleEvaluator.checkPredicate(c, state))
+            )
+          : null;
 
         set((draft) => {
 
           draft.totalAttempts += 1;
 
-          if (!rule) {
-            const target = draft.entities[action.targetId];
-            const source = action.sourceId ? draft.entities[action.sourceId] : null;
+          if (passingSuccessRule) {
+            // ── SUCCESS PATH ─────────────────────────────────────────────
+            const result = RuleEvaluator.evaluate(passingSuccessRule, state);
 
-            draft.failedAttempts += 1;
-            TelemetryService.record('ACTION_EVALUATED', draft.currentChallengeId, { passed: false, reason: 'no_rule' });
-
-            if (action.type === 'USE_ITEM_ON' && source && target) {
-              draft.lastFeedback = {
-                type: 'failure',
-                message: `You tried using ${source.name} on ${target.name}, but the mechanism does not accept it.`,
-                timestamp: Date.now()
-              };
-            } else if (action.type === 'INSPECT' && target) {
-              draft.lastFeedback = {
-                type: 'info',
-                message: target.description,
-                timestamp: Date.now()
-              };
-            } else {
-              draft.lastFeedback = {
-                type: 'neutral',
-                message: 'Nothing happens.',
-                timestamp: Date.now()
-              };
-            }
-            return;
-          }
-
-          // Evaluate deterministic rule
-          const result = RuleEvaluator.evaluate(rule, state);
-
-          if (result.passed) {
-            // Apply mutations
             for (const effect of result.effects) {
               if (effect.type === 'SET_ENTITY_STATE' && effect.property) {
                 if (draft.entities[effect.target]) {
@@ -281,18 +323,41 @@ export const useGameStore = create<GameStore>()(
                 attempts: draft.totalAttempts,
                 failedAttempts: draft.failedAttempts
               });
+
+              // Phase 2: Record challenge outcome in LearnerStore
+              const skillKey = SKILL_KEY_MAP[currentChallenge.targetReadingSkill];
+              if (skillKey) {
+                useLearnerStore.getState().recordChallengeResult({
+                  challengeId: draft.currentChallengeId,
+                  skill: skillKey,
+                  attempts: draft.totalAttempts,
+                  rereads: draft.rereadCount,
+                  hintsUsed: useLearnerStore.getState().getHintLevel(draft.currentChallengeId),
+                  completionTimeMs: Date.now() - draft.readingDwellStartTime,
+                  firstTrySuccess: draft.failedAttempts === 0
+                });
+              }
             }
-          } else {
+
+          } else if (matchingFailureRule) {
+            // ── FAILURE DETECTION PATH ───────────────────────────────────
+            // A failure-detection rule's conditions describe the bad state.
+            // When they match, use its onFailure message and side effects.
             draft.failedAttempts += 1;
             draft.lastFeedback = {
               type: 'failure',
-              message: result.feedback,
+              message: matchingFailureRule.onFailure.feedbackMessage,
               timestamp: Date.now()
             };
 
-            // Apply failure side effects if defined (e.g. tripping breakers back to false)
-            if (rule.onFailure.effects) {
-              for (const eff of rule.onFailure.effects) {
+            // Phase 2: Skill tracking on failure
+            const skillKey = SKILL_KEY_MAP[currentChallenge.targetReadingSkill];
+            if (skillKey) {
+              useLearnerStore.getState().updateSkill(skillKey, -0.04);
+            }
+
+            if (matchingFailureRule.onFailure.effects) {
+              for (const eff of matchingFailureRule.onFailure.effects) {
                 if (eff.type === 'SET_ENTITY_STATE' && eff.property && draft.entities[eff.target]) {
                   draft.entities[eff.target].states[eff.property] = eff.value;
                 }
@@ -301,11 +366,125 @@ export const useGameStore = create<GameStore>()(
 
             TelemetryService.record('ACTION_EVALUATED', draft.currentChallengeId, {
               passed: false,
-              feedback: result.feedback
+              feedback: matchingFailureRule.onFailure.feedbackMessage
             });
+
+          } else {
+            // ── FALLBACK PATH ────────────────────────────────────────────
+            // No success rule passed and no failure-detection rule matched.
+            // Try evaluating success rules for their onFailure feedback
+            // (e.g. "already done" messages), then failure-detection rules
+            // (e.g. Challenge 1's __never_pass__ rules).
+            let fallbackHandled = false;
+
+            for (const r of successRules) {
+              const result = RuleEvaluator.evaluate(r, state);
+              if (!result.passed && result.feedback) {
+                draft.failedAttempts += 1;
+                draft.lastFeedback = {
+                  type: 'failure',
+                  message: result.feedback,
+                  timestamp: Date.now()
+                };
+
+                const skillKey = SKILL_KEY_MAP[currentChallenge.targetReadingSkill];
+                if (skillKey) {
+                  useLearnerStore.getState().updateSkill(skillKey, -0.04);
+                }
+
+                if (r.onFailure.effects) {
+                  for (const eff of r.onFailure.effects) {
+                    if (eff.type === 'SET_ENTITY_STATE' && eff.property && draft.entities[eff.target]) {
+                      draft.entities[eff.target].states[eff.property] = eff.value;
+                    }
+                  }
+                }
+                TelemetryService.record('ACTION_EVALUATED', draft.currentChallengeId, { passed: false, feedback: result.feedback });
+                fallbackHandled = true;
+                break;
+              }
+            }
+
+            if (!fallbackHandled) {
+              for (const r of failureDetectionRules) {
+                const result = RuleEvaluator.evaluate(r, state);
+                if (!result.passed && result.feedback) {
+                  draft.failedAttempts += 1;
+                  draft.lastFeedback = {
+                    type: 'failure',
+                    message: result.feedback,
+                    timestamp: Date.now()
+                  };
+
+                  const skillKey = SKILL_KEY_MAP[currentChallenge.targetReadingSkill];
+                  if (skillKey) {
+                    useLearnerStore.getState().updateSkill(skillKey, -0.04);
+                  }
+
+                  if (r.onFailure.effects) {
+                    for (const eff of r.onFailure.effects) {
+                      if (eff.type === 'SET_ENTITY_STATE' && eff.property && draft.entities[eff.target]) {
+                        draft.entities[eff.target].states[eff.property] = eff.value;
+                      }
+                    }
+                  }
+                  TelemetryService.record('ACTION_EVALUATED', draft.currentChallengeId, { passed: false, feedback: result.feedback });
+                  fallbackHandled = true;
+                  break;
+                }
+              }
+            }
+
+            if (!fallbackHandled) {
+              // Generic messages for completely unmatched actions
+              const target = draft.entities[action.targetId];
+              const source = action.sourceId ? draft.entities[action.sourceId] : null;
+              draft.failedAttempts += 1;
+
+              const skillKey = SKILL_KEY_MAP[currentChallenge.targetReadingSkill];
+              if (skillKey) {
+                useLearnerStore.getState().updateSkill(skillKey, -0.04);
+              }
+
+              TelemetryService.record('ACTION_EVALUATED', draft.currentChallengeId, { passed: false, reason: 'no_rule' });
+
+              if (action.type === 'USE_ITEM_ON' && source && target) {
+                draft.lastFeedback = {
+                  type: 'failure',
+                  message: `You tried using ${source.name} on ${target.name}, but the mechanism does not accept it.`,
+                  timestamp: Date.now()
+                };
+              } else if (action.type === 'INSPECT' && target) {
+                draft.lastFeedback = {
+                  type: 'info',
+                  message: target.description,
+                  timestamp: Date.now()
+                };
+              } else {
+                draft.lastFeedback = {
+                  type: 'neutral',
+                  message: 'Nothing happens.',
+                  timestamp: Date.now()
+                };
+              }
+            }
           }
         });
       }
     };
   })
 );
+
+// Listen to audience / difficulty changes in LearnerStore to re-adapt the active challenge passage
+let prevAudience = useLearnerStore.getState().profile?.audience;
+let prevDiff = useLearnerStore.getState().profile?.readingDifficulty;
+
+useLearnerStore.subscribe((learnerState) => {
+  const p = learnerState.profile;
+  if (!p) return;
+  if (p.audience !== prevAudience || p.readingDifficulty !== prevDiff) {
+    prevAudience = p.audience;
+    prevDiff = p.readingDifficulty;
+    useGameStore.getState().loadAdaptedPassage();
+  }
+});
