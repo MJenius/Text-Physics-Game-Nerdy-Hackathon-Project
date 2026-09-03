@@ -1,14 +1,34 @@
 export type EntityId = string;
-export type LocationId = 'courtyard' | 'library' | 'laboratory' | 'junction' | 'dome' | 'submersible_delta';
+export type LocationId =
+  | 'courtyard'
+  | 'library'
+  | 'laboratory'
+  | 'junction'
+  | 'concourse'
+  | 'quarters'
+  | 'dome'
+  | 'submersible_delta'
+  | 'boreas_station'
+  | 'orbital_module';
+
 export type ChallengeId = string;
 
 export type InteractionArchetype =
-  | 'MECHANISM'
+  | 'CALIBRATE'
+  | 'ROUTE'
   | 'INVESTIGATION'
+  | 'SORT'
+  | 'TIMELINE'
   | 'NAVIGATION'
   | 'DIALOGUE'
-  | 'RESOURCE_DECISION'
-  | 'SYNTHESIS';
+  | 'RESOURCE'
+  | 'REPAIR'
+  | 'SEARCH'
+  | 'EVIDENCE'
+  | 'SYNTHESIS'
+  // Backwards compatibility aliases
+  | 'MECHANISM'
+  | 'RESOURCE_DECISION';
 
 export type DocumentType =
   | 'field_journal'
@@ -16,7 +36,10 @@ export type DocumentType =
   | 'telegraph'
   | 'emergency_log'
   | 'architectural_map'
-  | 'personal_diary';
+  | 'personal_diary'
+  | 'scientific_report'
+  | 'witness_transcript'
+  | 'schematic_blueprint';
 
 export interface StoryDocument {
   id: string;
@@ -26,6 +49,7 @@ export interface StoryDocument {
   paragraphs: string[];
   keyClues?: string[];
   dateOrStamp?: string;
+  isInspected?: boolean;
 }
 
 export interface Entity {
@@ -41,10 +65,21 @@ export interface Entity {
 }
 
 export interface Predicate {
-  type: 'ENTITY_STATE' | 'INVENTORY_HAS' | 'FLAG_IS' | 'DECISION_EQUALS' | 'FACT_KNOWN' | 'POWERED_HAS';
+  type:
+    | 'ENTITY_STATE'
+    | 'STATE_IS'
+    | 'INVENTORY_HAS'
+    | 'IN_INVENTORY'
+    | 'FLAG_IS'
+    | 'DECISION_EQUALS'
+    | 'FACT_KNOWN'
+    | 'POWERED_HAS'
+    | 'RELATIONSHIP_AT_LEAST'
+    | 'DECISION_IN'
+    | 'HYPOTHESIS_CONFIRMED';
   target: string;
   property?: string;
-  expected: string | number | boolean;
+  expected: string | number | boolean | (string | number | boolean)[];
 }
 
 export interface RuleEffect {
@@ -57,7 +92,12 @@ export interface RuleEffect {
     | 'RECORD_DECISION'
     | 'DISCOVER_FACT'
     | 'POWER_SYSTEM'
-    | 'TRANSITION_SCENE';
+    | 'TRANSITION_SCENE'
+    | 'MODIFY_RELATIONSHIP'
+    | 'ADD_HYPOTHESIS'
+    | 'CONFIRM_HYPOTHESIS'
+    | 'ADD_UNCERTAINTY'
+    | 'RESOLVE_UNCERTAINTY';
   target: string;
   property?: string;
   value: string | number | boolean;
@@ -67,7 +107,7 @@ export interface RuleEffect {
 export interface GameRule {
   id: string;
   challengeId: ChallengeId;
-  action: string; // e.g., 'USE_ITEM_ON', 'ACTIVATE', 'INSPECT', 'SELECT_EVIDENCE', 'COMMIT_CHOICE'
+  action: string; // e.g., 'USE_ITEM_ON', 'ACTIVATE', 'INSPECT', 'SELECT_EVIDENCE', 'COMMIT_CHOICE', 'CALIBRATE', 'ROUTE_WIRE', 'DIALOGUE_CHOOSE'
   sourceId?: EntityId;
   targetId: EntityId;
   conditions: Predicate[];
@@ -75,7 +115,7 @@ export interface GameRule {
     effects: RuleEffect[];
     feedbackMessage: string;
     soundEffect?: string;
-    consequenceVisual?: 'steam_burst' | 'gear_shudder' | 'circuit_spark' | 'shutter_slam' | 'door_unlock';
+    consequenceVisual?: 'steam_burst' | 'gear_shudder' | 'circuit_spark' | 'shutter_slam' | 'door_unlock' | 'none';
   };
   onFailure: {
     feedbackMessage: string;
@@ -83,7 +123,7 @@ export interface GameRule {
     soundEffect?: string;
     autoReset?: boolean;
     brokenConditionIndex?: number;
-    consequenceVisual?: 'steam_burst' | 'gear_shudder' | 'circuit_spark' | 'shutter_slam';
+    consequenceVisual?: 'steam_burst' | 'gear_shudder' | 'circuit_spark' | 'shutter_slam' | 'none';
   };
 }
 
@@ -105,34 +145,6 @@ export interface DecisionOption {
   effects: RuleEffect[];
 }
 
-export interface Challenge {
-  id: ChallengeId;
-  order: number;
-  act?: number;
-  title: string;
-  locationId: LocationId;
-  archetype?: InteractionArchetype;
-  passage: Passage;
-  targetReadingSkill:
-    | 'literal_retrieval'
-    | 'sequencing'
-    | 'cause_effect'
-    | 'negative_constraint'
-    | 'multi_condition'
-    | 'synthesis';
-  ruleIds: string[];
-  completionCondition: Predicate[];
-  completedMessage: string;
-  /** Phase 2: AI-adapted passage for the current learner profile */
-  adaptedPassage?: import('./learner').GeneratedPassage | null;
-  /** Phase 3: Agency decisions & interactive archetype state */
-  availableDecisions?: DecisionOption[];
-  nextSceneBranches?: {
-    defaultNext: string;
-    conditionalNext?: { condition: Predicate; targetSceneId: string }[];
-  };
-}
-
 export interface PlayerDecisionRecord {
   value: string | number | boolean;
   rationale?: string;
@@ -140,13 +152,23 @@ export interface PlayerDecisionRecord {
   act: number;
 }
 
+export interface HypothesisRecord {
+  id: string;
+  title: string;
+  statement: string;
+  sourceAct: number;
+  status: 'confirmed' | 'unconfirmed' | 'disproven';
+  confidence: 'high' | 'moderate' | 'low';
+  supportingFacts: string[];
+}
+
 export interface NarrativeWorldState {
   discoveredFacts: string[];
   visitedLocations: LocationId[];
   obtainedItems: string[];
-  poweredSystems: ('archive' | 'laboratory' | 'observatory')[];
+  poweredSystems: ('archive' | 'laboratory' | 'observatory' | 'transmitter' | string)[];
   triggeredEvents: string[];
-  characterRelationships: Record<string, number>;
+  characterRelationships: Record<string, number>; // e.g. aris: 65 (0-100)
   playerDecisions: Record<string, PlayerDecisionRecord>;
   knownWorldRules: string[];
   narrativeFlags: Record<string, boolean | number | string>;
@@ -157,6 +179,10 @@ export interface NarrativeWorldState {
     hint?: string;
   };
   availableLocations: LocationId[];
+  hypotheses: HypothesisRecord[];
+  uncertainties: string[];
+  forensicInspectionHistory: Array<{ targetId: string; timestamp: number }>;
+  activeWorldId: 'lost_observatory' | 'arctic_station' | 'triton_deep_sea' | 'orbital_habitat';
 }
 
 export interface PhysicalConsequence {
@@ -185,7 +211,19 @@ export interface WorldState {
 }
 
 export interface PlayerAction {
-  type: 'USE_ITEM_ON' | 'ACTIVATE' | 'INSPECT' | 'PICKUP' | 'SELECT_EVIDENCE' | 'COMMIT_CHOICE';
+  type:
+    | 'USE_ITEM_ON'
+    | 'ACTIVATE'
+    | 'INSPECT'
+    | 'PICKUP'
+    | 'SELECT_EVIDENCE'
+    | 'COMMIT_CHOICE'
+    | 'CALIBRATE'
+    | 'ROUTE_WIRE'
+    | 'SORT_ITEM'
+    | 'TIMELINE_ORDER'
+    | 'DIALOGUE_CHOOSE'
+    | 'REPAIR_ASSEMBLE';
   sourceId?: EntityId;
   targetId: EntityId;
   payload?: any;
@@ -197,4 +235,130 @@ export interface EvaluationResult {
   effects: RuleEffect[];
   soundEffect?: string;
   consequenceVisual?: PhysicalConsequence['visualEffect'];
+}
+
+// Archetype Specific Configurations on Challenges:
+
+export interface CalibrateConfig {
+  variableName: string;
+  unit: string;
+  minValue: number;
+  maxValue: number;
+  step: number;
+  targetValue: number;
+  tolerance?: number;
+  gaugeLabel: string;
+  instructionSnippet: string;
+}
+
+export interface RouteNode {
+  id: string;
+  name: string;
+  powerDemandKw: number;
+  icon?: string;
+  description: string;
+}
+
+export interface RouteWiringConfig {
+  generatorBusKw: number;
+  maxLoadCeilingKw: number;
+  nodes: RouteNode[];
+  requiredActiveNodeIds?: string[];
+  incompatibleNodePairs?: [string, string][];
+}
+
+export interface DialogueNode {
+  id: string;
+  speaker: string;
+  text: string;
+  mood?: 'neutral' | 'suspicious' | 'cooperative' | 'agitated';
+  options: {
+    id: string;
+    text: string;
+    intent: 'inquire' | 'challenge' | 'disclose' | 'sympathize';
+    trustDelta?: number;
+    consequenceHint?: string;
+    nextNodeId?: string;
+    effects?: RuleEffect[];
+    isTerminal?: boolean;
+  }[];
+}
+
+export interface TimelineEvent {
+  id: string;
+  text: string;
+  sourceDocId?: string;
+  correctChronologicalIndex: number;
+  causalParentId?: string; // Distinguish temporal precedence vs causal driver!
+}
+
+export interface SortCategory {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface SortItem {
+  id: string;
+  label: string;
+  description: string;
+  targetCategoryId: string; // Ground truth category from text
+  isDistractor?: boolean;
+}
+
+export interface AssemblyComponent {
+  id: string;
+  name: string;
+  slotIndex: number;
+  description: string;
+  requiredPrecedingComponentId?: string;
+}
+
+export interface Challenge {
+  id: ChallengeId;
+  order: number;
+  act?: number;
+  title: string;
+  locationId: LocationId;
+  archetype?: InteractionArchetype;
+  passage: Passage;
+  targetReadingSkill:
+    | 'literal_retrieval'
+    | 'sequencing'
+    | 'cause_effect'
+    | 'negative_constraint'
+    | 'multi_condition'
+    | 'synthesis';
+  ruleIds: string[];
+  completionCondition: Predicate[];
+  completedMessage: string;
+  /** Phase 2: AI-adapted passage for the current learner profile */
+  adaptedPassage?: import('./learner').GeneratedPassage | null;
+  /** Phase 3: Agency decisions & interactive archetype state */
+  availableDecisions?: DecisionOption[];
+  nextSceneBranches?: {
+    defaultNext: string;
+    conditionalNext?: { condition: Predicate; targetSceneId: string }[];
+  };
+
+  // Archetype Configurations (optional depending on archetype):
+  calibrateConfig?: CalibrateConfig;
+  routeWiringConfig?: RouteWiringConfig;
+  dialogueConfig?: {
+    characterName: string;
+    initialNodeId: string;
+    nodes: Record<string, DialogueNode>;
+  };
+  timelineConfig?: {
+    events: TimelineEvent[];
+    promptQuestion: string;
+  };
+  sortConfig?: {
+    categories: SortCategory[];
+    items: SortItem[];
+  };
+  assemblyConfig?: {
+    components: AssemblyComponent[];
+    slotsCount: number;
+  };
 }

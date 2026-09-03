@@ -4,12 +4,7 @@ import {
   Lock,
   LockOpen,
   DoorClosed,
-  RotateCw,
-  Droplets,
-  Flame,
-  Gauge,
   Zap,
-  Radio,
   Sliders,
   Sparkles,
   Compass,
@@ -21,6 +16,10 @@ import {
   Wind
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { CalibrateArchetype } from './archetypes/CalibrateArchetype';
+import { RouteWiringArchetype } from './archetypes/RouteWiringArchetype';
+import { DialogueArchetype } from './archetypes/DialogueArchetype';
+import { RepairAssemblyArchetype } from './archetypes/RepairAssemblyArchetype';
 
 export const StageViewport: React.FC = () => {
   const {
@@ -40,8 +39,8 @@ export const StageViewport: React.FC = () => {
   React.useEffect(() => {
     if (isComplete && currentChallenge.id === 'act_7_dome') {
       confetti({
-        particleCount: 100,
-        spread: 80,
+        particleCount: 120,
+        spread: 90,
         origin: { y: 0.5 }
       });
     }
@@ -95,6 +94,7 @@ export const StageViewport: React.FC = () => {
               World Reaction
             </span>
             <button
+              type="button"
               onClick={clearPhysicalConsequence}
               className="text-[10px] font-mono text-stone-400 hover:text-stone-200 cursor-pointer"
             >
@@ -129,6 +129,7 @@ export const StageViewport: React.FC = () => {
           {decisions.map((opt) => (
             <button
               key={opt.id}
+              type="button"
               onClick={() => executeDecision(opt.id)}
               className="group p-4 rounded-xl bg-stone-900/90 border border-stone-700 hover:border-amber-400 hover:bg-stone-850 flex flex-col items-start gap-1.5 transition-all text-left cursor-pointer shadow-md hover:shadow-[0_0_20px_rgba(245,158,11,0.2)]"
             >
@@ -152,8 +153,7 @@ export const StageViewport: React.FC = () => {
   };
 
   // ──────────────────────────────────────────────────────────────────────────
-  // ARCHETYPE 1: MECHANISM (Act I: Sealed Vestibule)
-  // Strict Neutral Styling: Zero Green Cheat Indicators!
+  // ACT I: ARRIVAL (Vestibule Outer Portal)
   // ──────────────────────────────────────────────────────────────────────────
   const renderAct1Vestibule = () => {
     const isIronUnlocked = Boolean(entities['iron_lock']?.states?.isUnlocked);
@@ -164,13 +164,14 @@ export const StageViewport: React.FC = () => {
       <div className="w-full max-w-xl flex flex-col items-center font-serif">
         <div className="relative w-full rounded-2xl border-4 border-stone-800 bg-[#0c1017] p-6 shadow-2xl overflow-hidden">
           <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-stone-800 border border-stone-700 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-stone-300 uppercase shadow">
-            Vestibule Outer Portal
+            Vestibule Outer Portal — Mount Caelum Gateway
           </div>
 
           <div className="min-h-[320px] w-full flex flex-col items-center justify-between py-4">
-            {/* Upper Brass Cross-Latch (Neutral Bronze Styling) */}
+            {/* Upper Brass Cross-Latch */}
             <div className="w-full flex justify-end pr-6">
               <button
+                type="button"
                 onClick={() => handleTargetClick('brass_latch')}
                 className={`p-4 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
                   isBrassUnlocked
@@ -188,9 +189,10 @@ export const StageViewport: React.FC = () => {
               </button>
             </div>
 
-            {/* Center Door Plate (Physical Push Action) */}
+            {/* Center Oak Door Plate (Physical Push Action) */}
             <div className="my-2">
               <button
+                type="button"
                 onClick={() => handleTargetClick('archive_door')}
                 className="group px-8 py-5 rounded-2xl bg-stone-900 border-2 border-stone-700 hover:border-amber-500 hover:bg-stone-850 flex flex-col items-center gap-2 transition-all cursor-pointer shadow-lg active:scale-95"
               >
@@ -204,9 +206,10 @@ export const StageViewport: React.FC = () => {
               </button>
             </div>
 
-            {/* Lower Wrought-Iron Deadbolt (Neutral Steel Styling) */}
+            {/* Lower Wrought-Iron Deadbolt */}
             <div className="w-full flex justify-start pl-6">
               <button
+                type="button"
                 onClick={() => handleTargetClick('iron_lock')}
                 className={`p-4 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
                   isIronUnlocked
@@ -237,368 +240,215 @@ export const StageViewport: React.FC = () => {
   };
 
   // ──────────────────────────────────────────────────────────────────────────
-  // ARCHETYPE 2: INVESTIGATION (Act II-A: Sunken Archive Safe)
-  // Safe Dial (0–9) & Release Lever Commit with Zero Green UI
+  // ACT II: THE DEAD CLOCK (Calibration Archetype)
   // ──────────────────────────────────────────────────────────────────────────
-  const renderAct2Archive = () => {
-    const dialPos = (entities['curator_safe']?.states?.dialPosition as number) || 0;
-    const isUnlocked = Boolean(entities['curator_safe']?.states?.isUnlocked);
+  const renderAct2Clock = () => {
+    const isClutchEngaged = Boolean(entities['pendulum_clutch']?.states?.isEngaged);
+    const isEscapementRunning = Boolean(entities['deadbeat_escapement']?.states?.isRunning);
 
     return (
-      <div className="w-full max-w-xl flex flex-col items-center font-serif">
-        <div className="relative w-full rounded-2xl border-4 border-stone-800 bg-[#0c1017] p-6 shadow-2xl">
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-stone-800 border border-stone-700 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-stone-300 uppercase shadow">
-            Curator’s Optical Safe — Sunken Archive
-          </div>
+      <div className="w-full max-w-xl flex flex-col items-center gap-4 font-serif">
+        <CalibrateArchetype
+          title="Great Sidereal Clock Pendulum"
+          variableName="Escapement Cadence"
+          unit="BPM"
+          initialValue={50}
+          minValue={45}
+          maxValue={70}
+          step={1}
+          targetValue={58}
+          tolerance={1}
+          instructionSnippet={
+            currentChallenge.calibrateConfig?.instructionSnippet ||
+            'At 2,840 meters elevation, calibrate the pendulum escapement to exactly 58 BPM.'
+          }
+          onCommit={(val, isAccurate) => {
+            executeAction({
+              type: 'CALIBRATE',
+              targetId: 'deadbeat_escapement',
+              payload: { value: val, isAccurate }
+            });
+          }}
+          disabled={isEscapementRunning}
+        />
 
-          <div className="py-6 flex flex-col items-center justify-center space-y-6">
-            {/* Safe Dial Interface */}
-            <div className="flex flex-col items-center">
-              <button
-                onClick={() => handleTargetClick('curator_safe')}
-                disabled={isUnlocked}
-                className={`w-32 h-32 rounded-full border-4 flex flex-col items-center justify-center gap-1 transition-all shadow-xl cursor-pointer ${
-                  isUnlocked
-                    ? 'bg-stone-900/60 border-stone-700 text-stone-400'
-                    : 'bg-stone-900 border-amber-600/70 hover:border-amber-400 active:scale-95'
-                }`}
-              >
-                <RotateCw className="w-6 h-6 text-amber-400" />
-                <span className="text-3xl font-mono font-bold text-amber-200">
-                  {dialPos}
-                </span>
-                <span className="text-[9px] font-mono uppercase text-stone-400">
-                  Click to Turn Dial
-                </span>
-              </button>
-              <p className="text-[11px] text-stone-400 mt-2 font-mono">
-                Formula: Month of Solstice minus Lunar Stations
+        {/* Once Escapement is running, enable Clutch Lever */}
+        {isEscapementRunning && (
+          <div className="w-full p-4 rounded-xl bg-stone-900 border border-amber-600/50 flex items-center justify-between animate-in fade-in">
+            <div>
+              <h4 className="text-xs font-bold text-amber-200 font-serif">
+                Pendulum Swinging at True Sidereal Rate (58 BPM)
+              </h4>
+              <p className="text-[11px] text-stone-400 font-sans">
+                Engage the mechanical drive clutch to connect the astronomical register.
               </p>
             </div>
 
-            {/* Commit Lever */}
-            <div>
-              <button
-                onClick={() => handleTargetClick('safe_lever')}
-                disabled={isUnlocked}
-                className={`px-8 py-3 rounded-xl border-2 flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-wider transition-all shadow-lg cursor-pointer ${
-                  isUnlocked
-                    ? 'bg-stone-900 border-stone-800 text-stone-500 cursor-not-allowed'
-                    : 'bg-amber-600 hover:bg-amber-500 border-amber-400 text-stone-950 active:scale-95'
-                }`}
-              >
-                <Sliders className="w-4 h-4" />
-                Commit Safe Release Lever
-              </button>
-            </div>
-
-            {/* Inside the safe when unlocked */}
-            {isUnlocked && (
-              <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-500/50 flex flex-col items-center gap-2 animate-in fade-in">
-                <Sparkles className="w-8 h-8 text-amber-300 animate-pulse" />
-                <h4 className="text-sm font-bold text-amber-200">
-                  589nm Quartz Optical Prism Retrieved!
-                </h4>
-                <p className="text-xs text-stone-300 text-center max-w-sm">
-                  The velvet safe tray glides forward. The precision optical crystal is secured in your inventory for the telescope rotunda.
-                </p>
-                <button
-                  onClick={advanceToNextChallenge}
-                  className="mt-2 flex items-center gap-2 px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-mono font-bold cursor-pointer"
-                >
-                  Proceed to Power Junction <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => handleTargetClick('pendulum_clutch')}
+              disabled={isClutchEngaged}
+              className={`px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider cursor-pointer ${
+                isClutchEngaged
+                  ? 'bg-stone-800 text-stone-500 border border-stone-700'
+                  : 'bg-amber-600 hover:bg-amber-500 text-stone-950 border border-amber-400 active:scale-95'
+              }`}
+            >
+              {isClutchEngaged ? 'Clutch Engaged' : 'Engage Clutch'}
+            </button>
           </div>
-        </div>
+        )}
+
+        {/* Once Complete, advance button */}
+        {isClutchEngaged && (
+          <div className="pt-2 flex justify-center animate-in fade-in">
+            <button
+              type="button"
+              onClick={advanceToNextChallenge}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-mono font-bold cursor-pointer shadow-lg"
+            >
+              Proceed to Power Junction <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
     );
   };
 
   // ──────────────────────────────────────────────────────────────────────────
-  // ARCHETYPE 1 (Branch B): MECHANISM (Act II-B: Hydraulic Boiler Priming)
-  // Water Valve & Burner Ignition with Causal Blowout Protection
-  // ──────────────────────────────────────────────────────────────────────────
-  const renderAct2Hydraulics = () => {
-    const isWaterOpen = Boolean(entities['cold_water_intake']?.states?.isOpen);
-    const isLit = Boolean(entities['pilot_burner']?.states?.isLit);
-    const psi = (entities['boiler_pressure_gauge']?.states?.psi as number) || 0;
-
-    return (
-      <div className="w-full max-w-xl flex flex-col items-center font-serif">
-        <div className="relative w-full rounded-2xl border-4 border-stone-800 bg-[#0c1017] p-6 shadow-2xl">
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-stone-800 border border-stone-700 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-stone-300 uppercase shadow">
-            Subterranean Boiler Vault — Steam Priming
-          </div>
-
-          <div className="py-4 space-y-6">
-            {/* Pressure Readout */}
-            <div className="flex items-center justify-between p-4 rounded-xl bg-stone-900 border border-stone-800 font-mono text-xs">
-              <div className="flex items-center gap-2 text-stone-300">
-                <Gauge className="w-5 h-5 text-amber-400" />
-                <span>Boiler Core Pressure:</span>
-              </div>
-              <span className={`text-base font-bold ${psi > 0 ? 'text-amber-300' : 'text-stone-500'}`}>
-                {psi} PSI
-              </span>
-            </div>
-
-            {/* Two Controls: Water Valve & Kerosene Burner */}
-            <div className="grid grid-cols-2 gap-4">
-              {/* Cold Water Intake */}
-              <button
-                onClick={() => handleTargetClick('cold_water_intake')}
-                className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all cursor-pointer ${
-                  isWaterOpen
-                    ? 'bg-stone-850 border-cyan-500/60 text-cyan-200'
-                    : 'bg-stone-900 border-stone-700 hover:border-cyan-400 text-stone-300'
-                }`}
-              >
-                <Droplets className="w-8 h-8 text-cyan-400" />
-                <span className="text-xs font-mono font-medium">Condenser Water Valve</span>
-                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-stone-950 border border-stone-800 text-stone-300">
-                  {isWaterOpen ? 'Valve Open (Flooded)' : 'Closed (Dry)'}
-                </span>
-              </button>
-
-              {/* Pilot Burner Igniter */}
-              <button
-                onClick={() => handleTargetClick('pilot_burner')}
-                className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all cursor-pointer ${
-                  isLit
-                    ? 'bg-stone-850 border-amber-500/60 text-amber-200'
-                    : 'bg-stone-900 border-stone-700 hover:border-amber-400 text-stone-300'
-                }`}
-              >
-                <Flame className="w-8 h-8 text-amber-400" />
-                <span className="text-xs font-mono font-medium">Kerosene Pilot Burner</span>
-                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-stone-950 border border-stone-800 text-stone-300">
-                  {isLit ? 'Flame Active' : 'Extinguished'}
-                </span>
-              </button>
-            </div>
-
-            {/* Advance when stabilized */}
-            {isLit && (
-              <div className="pt-2 flex justify-center animate-in fade-in">
-                <button
-                  onClick={advanceToNextChallenge}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-mono font-bold cursor-pointer"
-                >
-                  Proceed to Power Junction <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // ARCHETYPE 3: RESOURCE ALLOCATION & TELEGRAPH (Act III: Great Junction)
-  // Acoustic Receiver, Knife Switches with 100 kW limit, & Agency Decision
+  // ACT III: POWER FAILURE (Route / Wiring Archetype)
   // ──────────────────────────────────────────────────────────────────────────
   const renderAct3Junction = () => {
-    const isArchiveEngaged = Boolean(entities['archive_power_switch']?.states?.isEngaged);
-    const isHydraulicEngaged = Boolean(entities['hydraulic_power_switch']?.states?.isEngaged);
+    const config = currentChallenge.routeWiringConfig;
+    const nodes = config?.nodes || [
+      { id: 'archive_power_switch', name: 'Archive Document Gallery', powerDemandKw: 80, description: 'Illuminates archives, safe scanners, and optical plates.' },
+      { id: 'hydraulic_power_switch', name: 'Hydraulic Core Elevator', powerDemandKw: 80, description: 'Drives pressurized hoist up the central mountain shaft.' },
+      { id: 'transmitter_power_switch', name: 'Acoustic Telegraph Relay', powerDemandKw: 20, description: 'Long-range telegraph transceiver array.' }
+    ];
 
     return (
       <div className="w-full max-w-xl flex flex-col items-center font-serif">
-        <div className="relative w-full rounded-2xl border-4 border-stone-800 bg-[#0c1017] p-6 shadow-2xl">
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-stone-800 border border-stone-700 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-stone-300 uppercase shadow">
-            Dynamo Power Routing Junction
-          </div>
+        <RouteWiringArchetype
+          title="Central Dynamo Switchboard"
+          maxLoadCeilingKw={100}
+          nodes={nodes}
+          incompatiblePairs={[['archive_power_switch', 'hydraulic_power_switch']]}
+          onCommitRouting={(activeIds, isOverloaded) => {
+            if (isOverloaded) {
+              executeAction({
+                type: 'ACTIVATE',
+                targetId: 'archive_power_switch'
+              });
+            } else {
+              executeAction({
+                type: 'ACTIVATE',
+                targetId: activeIds[0] || 'archive_power_switch'
+              });
+            }
+          }}
+        />
 
-          <div className="py-3 space-y-4">
-            {/* Bus Bar Load Meter */}
-            <div className="p-3.5 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-between text-xs font-mono">
-              <div className="flex items-center gap-2 text-stone-300">
-                <Zap className="w-4 h-4 text-amber-400" />
-                <span>Emergency Dynamo Bus Limit:</span>
-              </div>
-              <span className="font-bold text-amber-300">
-                100 kW Ceiling (80 kW per Breaker)
-              </span>
-            </div>
-
-            {/* Knife Switches */}
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                onClick={() => handleTargetClick('archive_power_switch')}
-                className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all cursor-pointer ${
-                  isArchiveEngaged
-                    ? 'bg-amber-950/30 border-amber-500/60 shadow-inner'
-                    : 'bg-stone-900 border-stone-700 hover:border-amber-400'
-                }`}
-              >
-                <Zap className={`w-7 h-7 ${isArchiveEngaged ? 'text-amber-400' : 'text-stone-500'}`} />
-                <span className="text-xs font-mono font-medium text-stone-200">Archive Scanners</span>
-                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-stone-950 border border-stone-800 text-stone-300">
-                  {isArchiveEngaged ? 'Engaged (80 kW)' : 'Open / Off'}
-                </span>
-              </button>
-
-              <button
-                onClick={() => handleTargetClick('hydraulic_power_switch')}
-                className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all cursor-pointer ${
-                  isHydraulicEngaged
-                    ? 'bg-amber-950/30 border-amber-500/60 shadow-inner'
-                    : 'bg-stone-900 border-stone-700 hover:border-amber-400'
-                }`}
-              >
-                <Zap className={`w-7 h-7 ${isHydraulicEngaged ? 'text-amber-400' : 'text-stone-500'}`} />
-                <span className="text-xs font-mono font-medium text-stone-200">Hydraulic Core Lift</span>
-                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-stone-950 border border-stone-800 text-stone-300">
-                  {isHydraulicEngaged ? 'Engaged (80 kW)' : 'Open / Off'}
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Show Strategic Decision Cards */}
+        {/* Show Strategic Decision Cards for Downstream Branching */}
         {renderDecisionCards()}
       </div>
     );
   };
 
   // ──────────────────────────────────────────────────────────────────────────
-  // ARCHETYPE 4: SPATIAL NAVIGATION (Act IV: Consequential Concourse)
-  // Reacts Directly to Act III Decision!
+  // ACT IV: THE MISSING ENGINEER (Dialogue Archetype)
   // ──────────────────────────────────────────────────────────────────────────
-  const renderAct4Navigation = () => {
-    const powerRoute = narrative.playerDecisions['power_allocation']?.value;
-    const isComplete = Boolean(useGameStore.getState().flags['act4_navigation_complete']);
+  const renderAct4Dialogue = () => {
+    const config = currentChallenge.dialogueConfig;
 
     return (
-      <div className="w-full max-w-xl flex flex-col items-center font-serif">
-        <div className="relative w-full rounded-2xl border-4 border-stone-800 bg-[#0c1017] p-6 shadow-2xl">
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-stone-800 border border-stone-700 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-stone-300 uppercase shadow">
-            The Concourse Crossroads — Dome Approach
+      <div className="w-full max-w-xl flex flex-col items-center gap-4 font-serif">
+        <DialogueArchetype
+          characterName={config?.characterName || 'Chief Machinist Aris'}
+          characterTitle="Head of Mountain Engineering & Maintenance"
+          initialTrust={narrative.characterRelationships['aris'] ?? 50}
+          initialNodeId={config?.initialNodeId || 'aris_intro'}
+          nodes={config?.nodes || {}}
+          onDialogueComplete={(finalNodeId, trustDelta, intent) => {
+            executeAction({
+              type: 'ACTIVATE',
+              targetId: 'intercom_pipe',
+              payload: { finalNodeId, trustDelta, intent }
+            });
+          }}
+        />
+
+        {Boolean(useGameStore.getState().flags['act4_navigation_complete']) && (
+          <div className="pt-2 flex justify-center animate-in fade-in">
+            <button
+              type="button"
+              onClick={advanceToNextChallenge}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-mono font-bold cursor-pointer shadow-lg"
+            >
+              Ascend to Concourse & Relay Room <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
-
-          <div className="py-4 space-y-5">
-            <div className="p-3.5 rounded-xl bg-stone-900 border border-stone-800 text-xs text-stone-300 font-serif leading-relaxed">
-              Active Facility Power: <strong className="text-amber-300 uppercase font-mono">{String(powerRoute || 'archive')}</strong> sector is energized.
-              Select the corresponding corridor to traverse upward without hazard.
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              {/* East Portal */}
-              <button
-                onClick={() => handleTargetClick('east_optical_portal')}
-                className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all cursor-pointer ${
-                  powerRoute === 'archive'
-                    ? 'bg-amber-950/30 border-amber-500/60 hover:border-amber-400'
-                    : 'bg-stone-900 border-stone-800 opacity-60'
-                }`}
-              >
-                <Compass className="w-8 h-8 text-amber-400" />
-                <span className="text-xs font-mono font-bold text-stone-200">
-                  East Optical Gallery
-                </span>
-                <span className="text-[10px] font-mono text-stone-400">
-                  {powerRoute === 'archive' ? 'Radiant Electric Light' : 'Dark & Hazardous'}
-                </span>
-              </button>
-
-              {/* West Elevator */}
-              <button
-                onClick={() => handleTargetClick('west_hydraulic_lift')}
-                className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all cursor-pointer ${
-                  powerRoute === 'laboratory'
-                    ? 'bg-cyan-950/30 border-cyan-500/60 hover:border-cyan-400'
-                    : 'bg-stone-900 border-stone-800 opacity-60'
-                }`}
-              >
-                <DoorClosed className="w-8 h-8 text-cyan-400" />
-                <span className="text-xs font-mono font-bold text-stone-200">
-                  West Hydraulic Elevator
-                </span>
-                <span className="text-[10px] font-mono text-stone-400">
-                  {powerRoute === 'laboratory' ? 'Hydraulic Hoist Online' : 'Unpowered Lift Shaft'}
-                </span>
-              </button>
-            </div>
-
-            {isComplete && (
-              <div className="pt-2 flex justify-center animate-in fade-in">
-                <button
-                  onClick={advanceToNextChallenge}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-mono font-bold cursor-pointer"
-                >
-                  Enter Adaptive Diagnostic Chamber <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     );
   };
 
   // ──────────────────────────────────────────────────────────────────────────
-  // ARCHETYPE 2 (Act V): ADAPTIVE DIAGNOSTIC INCIDENT INVESTIGATION
-  // Incident Log Analysis & Ceramic Shunt Replacement
+  // ACT V: THE CONSEQUENCE (Repair / Assembly Archetype)
   // ──────────────────────────────────────────────────────────────────────────
   const renderAct5Adaptive = () => {
     const shuntState = (entities['emergency_telemetry_terminal']?.states?.shuntState as string) || 'BURNED';
     const isComplete = shuntState === 'RESTORED';
+    const powerRoute = narrative.playerDecisions['power_allocation']?.value;
 
     return (
-      <div className="w-full max-w-xl flex flex-col items-center font-serif">
-        <div className="relative w-full rounded-2xl border-4 border-stone-800 bg-[#0c1017] p-6 shadow-2xl">
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-stone-800 border border-stone-700 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-stone-300 uppercase shadow">
-            Relay Room — Adaptive Incident Investigation
+      <div className="w-full max-w-xl flex flex-col items-center gap-4 font-serif">
+        {/* Sector Status Banner showing ripple effects */}
+        <div className="w-full p-4 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-between text-xs font-mono">
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-amber-400" />
+            <span>Sector Status:</span>
           </div>
-
-          <div className="py-4 space-y-5">
-            <div className="p-4 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-between font-mono text-xs">
-              <div className="flex items-center gap-2 text-stone-300">
-                <Radio className="w-5 h-5 text-amber-400" />
-                <span>Dome Relay Filament:</span>
-              </div>
-              <span className={`font-bold ${shuntState === 'RESTORED' ? 'text-amber-300' : 'text-rose-400'}`}>
-                {shuntState === 'RESTORED' ? 'ONLINE (Restored)' : 'MELTED / BURNED'}
-              </span>
-            </div>
-
-            <div className="flex flex-col items-center justify-center p-6 border border-stone-800 rounded-xl bg-stone-950/60">
-              <button
-                onClick={() => handleTargetClick('emergency_telemetry_terminal')}
-                className="group p-5 rounded-2xl bg-stone-900 border border-stone-700 hover:border-amber-400 flex flex-col items-center gap-2 cursor-pointer"
-              >
-                <Zap className="w-10 h-10 text-amber-400 group-hover:scale-105 transition-transform" />
-                <span className="text-xs font-mono text-stone-200">
-                  {entities['emergency_telemetry_terminal']?.name}
-                </span>
-                <span className="text-[10px] font-mono text-stone-400">
-                  (Select Ceramic Safety Shunt from inventory to install)
-                </span>
-              </button>
-            </div>
-
-            {isComplete && (
-              <div className="pt-2 flex justify-center animate-in fade-in">
-                <button
-                  onClick={advanceToNextChallenge}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-mono font-bold cursor-pointer"
-                >
-                  Ascend to Master Celestial Dome <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-          </div>
+          <span className="text-amber-300 font-bold uppercase">
+            {powerRoute === 'laboratory' ? 'Laboratory Powered • Archive in Darkness' : 'Archive Powered • Elevator Depowered'}
+          </span>
         </div>
+
+        <RepairAssemblyArchetype
+          title="Dome Relay Terminal Safety Shunt"
+          instructionSnippet="Install Ceramic Safety Shunt directly into Socket #1 to re-establish dome circuit."
+          slotsCount={1}
+          components={[
+            { id: 'replacement_shunt', name: 'Ceramic Safety Shunt', slotIndex: 0, description: 'Stepped ceramic 20A shunt.' }
+          ]}
+          onCommitAssembly={(_slots, isCorrect) => {
+            if (isCorrect) {
+              executeAction({
+                type: 'USE_ITEM_ON',
+                sourceId: 'replacement_shunt',
+                targetId: 'emergency_telemetry_terminal'
+              });
+            }
+          }}
+          disabled={isComplete}
+        />
+
+        {isComplete && (
+          <div className="pt-2 flex justify-center animate-in fade-in">
+            <button
+              type="button"
+              onClick={advanceToNextChallenge}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-mono font-bold cursor-pointer shadow-lg"
+            >
+              Ascend to Master Celestial Dome <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
     );
   };
 
   // ──────────────────────────────────────────────────────────────────────────
-  // ARCHETYPE 5: MASTER SYNTHESIS (Act VII: Celestial Rotunda)
-  // Strict Zero-Solution-State UI: Neutral Dials, Committed Consequence!
+  // ACT VII: FINAL SYNTHESIS (Celestial Rotunda)
   // ──────────────────────────────────────────────────────────────────────────
   const renderAct7Dome = () => {
     const heading = (entities['azimuth_dial']?.states?.heading as string) || 'East';
@@ -617,23 +467,24 @@ export const StageViewport: React.FC = () => {
           {isDomeOpen ? (
             <div className="py-8 flex flex-col items-center justify-center animate-in zoom-in-95 duration-700 text-center space-y-3">
               <Sparkles className="w-16 h-16 text-amber-300 animate-spin mb-2" />
-              <h2 className="text-2xl font-bold text-amber-200">
+              <h2 className="text-2xl font-bold text-amber-200 font-serif">
                 THE LOST OBSERVATORY LIVES AGAIN!
               </h2>
               <p className="text-xs text-stone-300 max-w-md leading-relaxed font-serif">
                 The massive copper roof petals glide open to the crisp mountain midnight.
                 The 40-inch Great Refractor tracks Polaris with sidereal perfection.
-                Starlight refracts through the quartz prism directly onto the scholar’s desk.
+                Starlight refracts through the quartz prism directly onto the scholar’s recording plate.
               </p>
               <div className="mt-4 p-4 rounded-xl bg-amber-950/40 border border-amber-500/50 text-xs font-mono text-amber-300">
-                ★ 7 of 7 Acts Completed Through Pure Reading Comprehension & Mental Model Agency!
+                ★ Complete 7-Act Adventure Finished Through Pure Reading Comprehension & Physical Deduction!
               </div>
             </div>
           ) : (
             <div className="space-y-4 my-2">
               <div className="grid grid-cols-3 gap-3">
-                {/* 1. Azimuth Dial (Neutral Brass — NO green cheat!) */}
+                {/* 1. Azimuth Dial (Neutral Brass — Zero green cheat!) */}
                 <button
+                  type="button"
                   onClick={() => handleTargetClick('azimuth_dial')}
                   className="p-3 rounded-xl border border-stone-700 bg-stone-900 hover:border-amber-400 flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer"
                 >
@@ -646,8 +497,9 @@ export const StageViewport: React.FC = () => {
                   </span>
                 </button>
 
-                {/* 2. Shutter Dogging Wheel (Neutral Iron) */}
+                {/* 2. Shutter Dogging Wheel */}
                 <button
+                  type="button"
                   onClick={() => handleTargetClick('shutter_lock_wheel')}
                   className="p-3 rounded-xl border border-stone-700 bg-stone-900 hover:border-amber-400 flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer"
                 >
@@ -660,8 +512,9 @@ export const StageViewport: React.FC = () => {
                   </span>
                 </button>
 
-                {/* 3. Star Clock Sync (Neutral Brass) */}
+                {/* 3. Star Clock Sync */}
                 <button
+                  type="button"
                   onClick={() => handleTargetClick('star_clock_sync_switch')}
                   className="p-3 rounded-xl border border-stone-700 bg-stone-900 hover:border-amber-400 flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer"
                 >
@@ -678,6 +531,7 @@ export const StageViewport: React.FC = () => {
               {/* Prism Insertion Slot */}
               <div className="flex justify-center pt-2">
                 <button
+                  type="button"
                   onClick={() => handleTargetClick('quartz_receptacle')}
                   className={`px-6 py-3 rounded-xl border flex items-center gap-2 font-mono text-xs transition-all cursor-pointer ${
                     hasPrism
@@ -690,9 +544,10 @@ export const StageViewport: React.FC = () => {
                 </button>
               </div>
 
-              {/* Master Aperture Actuator (The Physical Commit Lever!) */}
+              {/* Master Aperture Actuator */}
               <div className="pt-3 flex flex-col items-center">
                 <button
+                  type="button"
                   onClick={() => handleTargetClick('master_aperture_lever')}
                   className="px-10 py-4 rounded-2xl bg-amber-600 hover:bg-amber-500 border-2 border-amber-400 text-stone-950 text-xs font-mono font-bold uppercase tracking-widest transition-all shadow-xl hover:shadow-[0_0_30px_rgba(245,158,11,0.3)] active:scale-95 cursor-pointer"
                 >
@@ -709,19 +564,19 @@ export const StageViewport: React.FC = () => {
     );
   };
 
-  // Route viewport renderer based on active scene
+  // Route viewport renderer based on active scene / archetype
   const renderActiveScene = () => {
     switch (currentChallenge.id) {
       case 'act_1_vestibule':
         return renderAct1Vestibule();
+      case 'act_2_clock':
       case 'act_2_archive':
-        return renderAct2Archive();
       case 'act_2_hydraulics':
-        return renderAct2Hydraulics();
+        return renderAct2Clock();
       case 'act_3_junction':
         return renderAct3Junction();
       case 'act_4_navigation':
-        return renderAct4Navigation();
+        return renderAct4Dialogue();
       case 'act_5_adaptive':
         return renderAct5Adaptive();
       case 'act_7_dome':

@@ -28,7 +28,11 @@ export type TelemetryEventType =
   | 'MEANINGFUL_DECISION_COMMITTED'
   | 'SCENE_TRANSITIONED'
   | 'HERO_TRANSFER_SCENARIO_LOADED'
-  | 'SCENE_COMPLETE';
+  | 'SCENE_COMPLETE'
+  | 'WORLD_CHANGED'
+  | 'CHARACTER_TRUST_UPDATED'
+  | 'HOTSPOT_INSPECTED'
+  | 'ARCHETYPE_COMMITTED';
 
 export interface TelemetryEvent {
   type: TelemetryEventType;

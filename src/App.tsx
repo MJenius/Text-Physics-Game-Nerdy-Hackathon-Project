@@ -14,9 +14,10 @@ import { initAIService } from './engine/AIContentService';
 import { DirectorHUD } from './components/DirectorHUD';
 import { EvidenceModal } from './components/EvidenceModal';
 import { DynamicTransferStageViewport } from './components/DynamicTransferStageViewport';
+import { DirectorInspector } from './components/DirectorInspector';
 import { ALL_SCHEMAS } from './content/challengeSchemas';
 import { TRITON_TRANSFER_SCENARIO } from './content/heroTransferScenario';
-import { Compass, RotateCcw, BarChart3, Settings, BookMarked } from 'lucide-react';
+import { Compass, RotateCcw, BarChart3, Settings, BookMarked, Terminal } from 'lucide-react';
 
 export const App: React.FC = () => {
   const {
@@ -34,6 +35,19 @@ export const App: React.FC = () => {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isProgressOpen, setIsProgressOpen] = useState(false);
+  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
+
+  // Keyboard shortcut: ` (backtick) or ~ toggles Developer Director Inspector
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === '`' || e.key === '~') {
+        e.preventDefault();
+        setIsInspectorOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Initialize AI service once on mount and then load adapted passage if onboarded
   useEffect(() => {
@@ -136,6 +150,15 @@ export const App: React.FC = () => {
             <RotateCcw className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Reset</span>
           </button>
+
+          <button
+            onClick={() => setIsInspectorOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono text-cyan-300 hover:text-cyan-200 bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-800/60 transition-colors cursor-pointer"
+            title="Director Inspector & Cognitive Debugger (~ key)"
+          >
+            <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden lg:inline">Dev HUD</span>
+          </button>
         </div>
       </header>
 
@@ -185,6 +208,15 @@ export const App: React.FC = () => {
       <ProgressView
         isOpen={isProgressOpen}
         onClose={() => setIsProgressOpen(false)}
+      />
+
+      {/* Field Notebook / Mental Model Workspace Modal */}
+      <NotebookModal />
+
+      {/* Developer Director Inspector & Cognitive Debug Terminal */}
+      <DirectorInspector
+        isOpen={isInspectorOpen}
+        onClose={() => setIsInspectorOpen(false)}
       />
 
       {/* Phase 3 Evidence Attribution Modal ('Show Your Proof') */}

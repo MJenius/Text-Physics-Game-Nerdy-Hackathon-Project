@@ -12,8 +12,7 @@ import {
   CAMPAIGN_SCENES,
   ALL_CAMPAIGN_RULES,
   ACT1_ENTITIES,
-  ACT2_ARCHIVE_ENTITIES,
-  ACT2_HYDRAULIC_ENTITIES,
+  ACT2_CLOCK_ENTITIES,
   ACT3_ENTITIES,
   ACT4_ENTITIES,
   ACT5_ENTITIES,
@@ -28,7 +27,9 @@ import { SKILL_KEY_MAP } from '../types/learner';
 import { RuleEvaluator } from './RuleEvaluator';
 import { TelemetryService } from './Telemetry';
 import { GameDirector } from './GameDirector';
+import { SoundFX } from './SoundFX';
 import { TRITON_TRANSFER_SCENARIO } from '../content/heroTransferScenario';
+import type { WorldId } from '../worlds/worldTypes';
 
 interface GameStore extends WorldState {
   currentChallengeIndex: number;
@@ -67,6 +68,9 @@ interface GameStore extends WorldState {
   exitHeroTransferScenario: () => void;
   simulateWeaknessProfile: (weakness: 'causal_inversion' | 'temporal_reversal' | 'ignored_negation') => void;
   jumpToAct: (actNumber: number) => void;
+  setWorld: (worldId: WorldId) => void;
+  updateTrust: (charId: string, delta: number) => void;
+  recordForensicInspection: (hotspotId: string) => void;
 }
 
 const INITIAL_NARRATIVE: NarrativeWorldState = {
@@ -96,17 +100,34 @@ const INITIAL_NARRATIVE: NarrativeWorldState = {
     description: 'Examine Curator Sterling’s field journal to disengage both locks without damaging the antique pivots.',
     hint: 'Disengage the upper brass latch by hand, and unlock the iron bolt with the gatekeeper key.'
   },
-  availableLocations: ['courtyard']
+  availableLocations: ['courtyard'],
+  hypotheses: [
+    {
+      id: 'hypo_evac',
+      title: 'Facility Evacuation Cause',
+      statement: 'The observatory staff abandoned the facility in haste during celestial transit.',
+      sourceAct: 1,
+      status: 'unconfirmed',
+      confidence: 'moderate',
+      supportingFacts: ['The Lost Observatory was evacuated during a mysterious celestial alignment.']
+    }
+  ],
+  uncertainties: [
+    'Whether Chief Machinist Aris sabotaged the facility or fled tectonic tremor.',
+    'Which sector of the facility holds the primary astronomical optical filters.'
+  ],
+  forensicInspectionHistory: [],
+  activeWorldId: 'lost_observatory'
 };
 
 const getSceneEntities = (sceneId: string): Record<string, any> => {
   switch (sceneId) {
     case 'act_1_vestibule':
       return JSON.parse(JSON.stringify(ACT1_ENTITIES));
+    case 'act_2_clock':
     case 'act_2_archive':
-      return JSON.parse(JSON.stringify(ACT2_ARCHIVE_ENTITIES));
     case 'act_2_hydraulics':
-      return JSON.parse(JSON.stringify(ACT2_HYDRAULIC_ENTITIES));
+      return JSON.parse(JSON.stringify(ACT2_CLOCK_ENTITIES));
     case 'act_3_junction':
       return JSON.parse(JSON.stringify(ACT3_ENTITIES));
     case 'act_4_navigation':
@@ -130,7 +151,7 @@ const getInitialSceneState = (sceneId: string = 'act_1_vestibule') => {
     currentChallenge: challenge,
     currentLocationId: challenge.locationId,
     currentChallengeId: challenge.id,
-    activeArchetype: challenge.archetype || ('MECHANISM' as InteractionArchetype),
+    activeArchetype: challenge.archetype || ('NAVIGATION' as InteractionArchetype),
     currentAct: challenge.act || 1,
     entities,
     inventory,
@@ -346,10 +367,12 @@ export const useGameStore = create<GameStore>()(
         // Automatic story arc progression
         let nextSceneId = 'act_7_dome';
         if (currentScene.id === 'act_1_vestibule') {
-          nextSceneId = state.narrative.playerDecisions['act1_path_choice']?.value === 'hydraulics'
-            ? 'act_2_hydraulics'
-            : 'act_2_archive';
-        } else if (currentScene.id === 'act_2_archive' || currentScene.id === 'act_2_hydraulics') {
+          nextSceneId = 'act_2_clock';
+        } else if (
+          currentScene.id === 'act_2_clock' ||
+          currentScene.id === 'act_2_archive' ||
+          currentScene.id === 'act_2_hydraulics'
+        ) {
           nextSceneId = 'act_3_junction';
         } else if (currentScene.id === 'act_3_junction') {
           nextSceneId = 'act_4_navigation';
@@ -459,7 +482,7 @@ export const useGameStore = create<GameStore>()(
       jumpToAct: (actNumber: number) => {
         const targetSceneMap: Record<number, string> = {
           1: 'act_1_vestibule',
-          2: 'act_2_archive',
+          2: 'act_2_clock',
           3: 'act_3_junction',
           4: 'act_4_navigation',
           5: 'act_5_adaptive',
@@ -477,6 +500,36 @@ export const useGameStore = create<GameStore>()(
           }
           get().transitionToScene(targetSceneId);
         }
+      },
+
+      setWorld: (worldId: WorldId) => {
+        set((draft) => {
+          draft.narrative.activeWorldId = worldId;
+          draft.lastFeedback = {
+            type: 'info',
+            message: `World Attunement shifted to ${worldId.replace(/_/g, ' ').toUpperCase()}.`,
+            timestamp: Date.now()
+          };
+        });
+        TelemetryService.record('WORLD_CHANGED', get().currentChallengeId, { worldId });
+      },
+
+      updateTrust: (charId: string, delta: number) => {
+        set((draft) => {
+          const current = draft.narrative.characterRelationships[charId] ?? 50;
+          draft.narrative.characterRelationships[charId] = Math.min(100, Math.max(0, current + delta));
+        });
+        TelemetryService.record('CHARACTER_TRUST_UPDATED', get().currentChallengeId, { charId, delta });
+      },
+
+      recordForensicInspection: (hotspotId: string) => {
+        set((draft) => {
+          draft.narrative.forensicInspectionHistory.push({
+            targetId: hotspotId,
+            timestamp: Date.now()
+          });
+        });
+        TelemetryService.record('HOTSPOT_INSPECTED', get().currentChallengeId, { hotspotId });
       },
 
       loadAdaptedPassage: async () => {
@@ -704,8 +757,27 @@ export const useGameStore = create<GameStore>()(
                   timestamp: Date.now(),
                   act: draft.currentAct
                 };
+              } else if (effect.type === 'MODIFY_RELATIONSHIP') {
+                const currentRel = draft.narrative.characterRelationships[effect.target] ?? 50;
+                draft.narrative.characterRelationships[effect.target] = Math.min(
+                  100,
+                  Math.max(0, currentRel + Number(effect.value))
+                );
+              } else if (effect.type === 'CONFIRM_HYPOTHESIS') {
+                const h = draft.narrative.hypotheses.find((hypo) => hypo.id === effect.target);
+                if (h) h.status = 'confirmed';
+              } else if (effect.type === 'ADD_UNCERTAINTY') {
+                if (!draft.narrative.uncertainties.includes(effect.value as string)) {
+                  draft.narrative.uncertainties.push(effect.value as string);
+                }
+              } else if (effect.type === 'RESOLVE_UNCERTAINTY') {
+                draft.narrative.uncertainties = draft.narrative.uncertainties.filter(
+                  (u) => u !== effect.target
+                );
               }
             }
+
+            SoundFX.playSoundEffect(result.soundEffect || 'latch_click');
 
             draft.lastFeedback = {
               type: 'info',
@@ -760,6 +832,7 @@ export const useGameStore = create<GameStore>()(
 
           } else if (matchingFailureRule) {
             // ── FAILURE DETECTION PATH (CONSEQUENCE ENGINE) ──────────────
+            SoundFX.playSoundEffect(matchingFailureRule.onFailure.soundEffect || 'gear_shudder');
             draft.failedAttempts += 1;
             draft.lastFeedback = {
               type: 'failure',

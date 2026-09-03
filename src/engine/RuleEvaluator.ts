@@ -34,11 +34,13 @@ export class RuleEvaluator {
    */
   static checkPredicate(p: Predicate, state: WorldState): boolean {
     switch (p.type) {
+      case 'STATE_IS':
       case 'ENTITY_STATE': {
         const entity = state.entities[p.target];
         if (!entity || !p.property) return false;
         return entity.states[p.property] === p.expected;
       }
+      case 'IN_INVENTORY':
       case 'INVENTORY_HAS': {
         return state.inventory.includes(p.target);
       }
@@ -49,11 +51,27 @@ export class RuleEvaluator {
         const dec = state.narrative?.playerDecisions?.[p.target];
         return dec ? dec.value === p.expected : false;
       }
+      case 'DECISION_IN': {
+        const dec = state.narrative?.playerDecisions?.[p.target];
+        if (!dec) return false;
+        if (Array.isArray(p.expected)) {
+          return p.expected.includes(dec.value);
+        }
+        return dec.value === p.expected;
+      }
       case 'FACT_KNOWN': {
         return state.narrative?.discoveredFacts?.includes(p.target) || false;
       }
       case 'POWERED_HAS': {
         return state.narrative?.poweredSystems?.includes(p.target as any) || false;
+      }
+      case 'RELATIONSHIP_AT_LEAST': {
+        const score = state.narrative?.characterRelationships?.[p.target] ?? 50;
+        return typeof p.expected === 'number' ? score >= p.expected : false;
+      }
+      case 'HYPOTHESIS_CONFIRMED': {
+        const hypo = state.narrative?.hypotheses?.find((h) => h.id === p.target);
+        return hypo ? hypo.status === 'confirmed' : false;
       }
       default:
         return false;
