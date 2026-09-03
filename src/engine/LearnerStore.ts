@@ -48,6 +48,7 @@ interface LearnerStore {
   completeOnboarding: (audience: Audience, difficulty: ReadingDifficulty) => void;
   setAudience: (audience: Audience) => void;
   setDifficulty: (difficulty: ReadingDifficulty) => void;
+  setAiEnabled: (enabled: boolean) => void;
   updateSkill: (skill: ReadingSkill, delta: number) => void;
   recordChallengeResult: (data: {
     challengeId: string;
@@ -79,6 +80,7 @@ export const useLearnerStore = create<LearnerStore>()(
           state.profile = {
             audience,
             readingDifficulty: difficulty,
+            aiEnabled: true,
             skills: { ...DEFAULT_SKILLS },
             sessionStats: {
               challengesCompleted: 0,
@@ -117,6 +119,16 @@ export const useLearnerStore = create<LearnerStore>()(
             state.profile.updatedAt = Date.now();
             saveToStorage(state.profile);
             TelemetryService.record('READING_LEVEL_SELECTED', 'settings', { readingDifficulty: difficulty });
+          }
+        });
+      },
+
+      setAiEnabled: (enabled: boolean) => {
+        set((state) => {
+          if (state.profile) {
+            state.profile.aiEnabled = enabled;
+            state.profile.updatedAt = Date.now();
+            saveToStorage(state.profile);
           }
         });
       },

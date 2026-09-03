@@ -57,8 +57,15 @@ export const ReadingPanel: React.FC = () => {
           {/* Reading Level Badge */}
           {profile && (
             <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-800/60 font-semibold capitalize flex items-center gap-1">
-              {adapted?.isAIGenerated && <Cpu className="w-3 h-3 text-cyan-400" />}
+              {isPassageGenerating ? (
+                <Loader2 className="w-3 h-3 text-amber-400 animate-spin" />
+              ) : adapted?.isAIGenerated ? (
+                <Cpu className="w-3 h-3 text-cyan-400" />
+              ) : (
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+              )}
               {profile.audience} • {profile.readingDifficulty}
+              {profile.aiEnabled === false && <span className="text-slate-400 text-[9px]">(Fixed)</span>}
             </span>
           )}
 
@@ -68,21 +75,11 @@ export const ReadingPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Loading state for dynamic AI generation */}
-      {isPassageGenerating ? (
-        <div className="my-auto py-12 flex flex-col items-center justify-center text-center">
-          <Loader2 className="w-8 h-8 text-amber-400 animate-spin mb-3" />
-          <h3 className="text-sm font-mono font-semibold text-slate-200">
-            Adapting Passage for {profile?.audience || 'Learner'}...
-          </h3>
-          <p className="text-xs text-slate-400 max-w-xs mt-1">
-            Generating difficulty-calibrated prose preserving deterministic world rules.
-          </p>
-        </div>
-      ) : (
-        <>
-          {/* Entry Title & Source */}
-          <div className="mb-4 shrink-0">
+      {/* Main Content (Always visible with instant zero-flicker preview) */}
+      <>
+        {/* Entry Title & Source */}
+        <div className="mb-4 shrink-0 flex items-start justify-between">
+          <div>
             <h2 className="text-xl font-serif font-bold text-amber-200/95 tracking-wide">
               {passageTitle}
             </h2>
@@ -90,6 +87,12 @@ export const ReadingPanel: React.FC = () => {
               {passageSource}
             </p>
           </div>
+          {isPassageGenerating && (
+            <span className="text-[10px] font-mono text-amber-300/80 bg-amber-950/40 border border-amber-800/40 px-2 py-0.5 rounded animate-pulse shrink-0 flex items-center gap-1">
+              <Loader2 className="w-2.5 h-2.5 animate-spin" /> AI Calibrating...
+            </span>
+          )}
+        </div>
 
           {/* Passage Content Card */}
           <div
@@ -177,7 +180,6 @@ export const ReadingPanel: React.FC = () => {
             </div>
           </div>
         </>
-      )}
-    </div>
-  );
-};
+      </div>
+    );
+  };

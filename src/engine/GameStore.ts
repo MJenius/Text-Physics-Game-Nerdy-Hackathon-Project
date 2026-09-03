@@ -4,7 +4,7 @@ import type { WorldState, PlayerAction, EntityId, Challenge } from '../types/gam
 import { ALL_CHALLENGES, ALL_INITIAL_ENTITIES, ALL_INITIAL_INVENTORY, ALL_RULES } from '../content/allChallenges';
 import { ALL_SCHEMAS } from '../content/challengeSchemas';
 import { getFallbackPassage } from '../content/fallbackPassages';
-import { generatePassage, isAIAvailable } from './AIContentService';
+import { generatePassage, isAIAvailable, getCachedPassage } from './AIContentService';
 import { getDifficultyConstraints } from './DifficultyEngine';
 import { useLearnerStore } from './LearnerStore';
 import { SKILL_KEY_MAP, type GeneratedPassage } from '../types/learner';
@@ -81,36 +81,65 @@ export const useGameStore = create<GameStore>()(
 
         const challenge = state.currentChallenge;
         const schema = ALL_SCHEMAS[challenge.id];
-        const constraints = getDifficultyConstraints(learner.audience, learner.readingDifficulty);
+        const isAIOn = learner.aiEnabled !== false;
 
+        // Instant deterministic fallback first
+        const deterministicFallback = getFallbackPassage(
+          challenge.id,
+          learner.readingDifficulty,
+          learner.audience,
+          challenge.passage
+        );
+
+        // If AI is disabled by user, immediately apply deterministic passage with 0 latency
+        if (!isAIOn || !isAIAvailable() || !schema) {
+          set((draft) => {
+            draft.currentChallenge.adaptedPassage = deterministicFallback;
+            draft.isPassageGenerating = false;
+          });
+          return;
+        }
+
+        // Check if we already have a cached AI passage for this combination (instant switch!)
+        const cached = getCachedPassage(challenge.id, learner.audience, learner.readingDifficulty);
+        if (cached) {
+          set((draft) => {
+            draft.currentChallenge.adaptedPassage = cached;
+            draft.isPassageGenerating = false;
+          });
+          return;
+        }
+
+        // Optimistic preview: immediately show verified fallback text while AI generates in background
         set((draft) => {
+          draft.currentChallenge.adaptedPassage = deterministicFallback;
           draft.isPassageGenerating = true;
         });
 
+        const constraints = getDifficultyConstraints(learner.audience, learner.readingDifficulty);
         let adapted: GeneratedPassage | null = null;
 
-        // Try AI first if available
-        if (isAIAvailable() && schema) {
-          try {
-            adapted = await generatePassage(schema, constraints, learner.audience, learner.readingDifficulty);
-          } catch (err) {
-            console.warn('[GameStore] AI passage generation failed, falling back:', err);
-          }
+        try {
+          adapted = await generatePassage(schema, constraints, learner.audience, learner.readingDifficulty);
+        } catch (err) {
+          console.warn('[GameStore] AI passage generation failed, retaining fallback:', err);
         }
 
-        // If AI unavailable or failed, use verified fallback
-        if (!adapted) {
-          adapted = getFallbackPassage(challenge.id, learner.readingDifficulty, learner.audience, challenge.passage);
-          TelemetryService.record('PASSAGE_GENERATION_FALLBACK', challenge.id, {
-            audience: learner.audience,
-            difficulty: learner.readingDifficulty
+        // Only update if learner profile is still on the same audience and difficulty
+        const currentLearner = useLearnerStore.getState().profile;
+        if (
+          currentLearner &&
+          currentLearner.audience === learner.audience &&
+          currentLearner.readingDifficulty === learner.readingDifficulty &&
+          currentLearner.aiEnabled !== false
+        ) {
+          set((draft) => {
+            if (adapted) {
+              draft.currentChallenge.adaptedPassage = adapted;
+            }
+            draft.isPassageGenerating = false;
           });
         }
-
-        set((draft) => {
-          draft.currentChallenge.adaptedPassage = adapted;
-          draft.isPassageGenerating = false;
-        });
       },
 
       selectInventoryItem: (id: EntityId | null) => {
@@ -475,16 +504,18 @@ export const useGameStore = create<GameStore>()(
   })
 );
 
-// Listen to audience / difficulty changes in LearnerStore to re-adapt the active challenge passage
+// Listen to audience / difficulty / aiEnabled changes in LearnerStore to re-adapt the active challenge passage
 let prevAudience = useLearnerStore.getState().profile?.audience;
 let prevDiff = useLearnerStore.getState().profile?.readingDifficulty;
+let prevAiEnabled = useLearnerStore.getState().profile?.aiEnabled;
 
 useLearnerStore.subscribe((learnerState) => {
   const p = learnerState.profile;
   if (!p) return;
-  if (p.audience !== prevAudience || p.readingDifficulty !== prevDiff) {
+  if (p.audience !== prevAudience || p.readingDifficulty !== prevDiff || p.aiEnabled !== prevAiEnabled) {
     prevAudience = p.audience;
     prevDiff = p.readingDifficulty;
+    prevAiEnabled = p.aiEnabled;
     useGameStore.getState().loadAdaptedPassage();
   }
 });

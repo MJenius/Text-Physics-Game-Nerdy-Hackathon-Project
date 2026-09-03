@@ -37,6 +37,7 @@ export const SKILL_DISPLAY_NAMES: Record<ReadingSkill, string> = {
 export interface LearnerProfile {
   audience: Audience;
   readingDifficulty: ReadingDifficulty;
+  aiEnabled?: boolean; // Toggle for AI dynamic generation vs deterministic fallback
   skills: Record<ReadingSkill, number>; // 0.0–1.0
   sessionStats: {
     challengesCompleted: number;

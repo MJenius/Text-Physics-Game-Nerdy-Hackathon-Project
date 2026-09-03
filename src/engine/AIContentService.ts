@@ -21,10 +21,26 @@ import { TelemetryService } from './Telemetry';
 
 let apiKey: string | null = null;
 let genAI: import('@google/genai').GoogleGenAI | null = null;
-const MODEL = 'gemini-3.6-flash';
+/** Fastest production flash model */
+const MODEL = 'gemini-2.5-flash-lite';
+
+/** In-memory cache for instant switching between already generated levels */
+const passageCache = new Map<string, GeneratedPassage>();
+
+function getCacheKey(challengeId: string, audience: Audience, difficulty: ReadingDifficulty): string {
+  return `${challengeId}_${audience}_${difficulty}`;
+}
+
+export function getCachedPassage(
+  challengeId: string,
+  audience: Audience,
+  difficulty: ReadingDifficulty
+): GeneratedPassage | null {
+  return passageCache.get(getCacheKey(challengeId, audience, difficulty)) || null;
+}
 
 /** Minimum interval between API calls (ms) */
-const RATE_LIMIT_MS = 1500;
+const RATE_LIMIT_MS = 300;
 let lastCallTime = 0;
 
 /**
@@ -37,7 +53,7 @@ export async function initAIService(): Promise<void> {
     try {
       const { GoogleGenAI } = await import('@google/genai');
       genAI = new GoogleGenAI({ apiKey: apiKey! });
-      console.log('[AIContentService] Gemini initialized with model', MODEL);
+      console.log('[AIContentService] Gemini initialized with fastest model:', MODEL);
     } catch (err) {
       console.warn('[AIContentService] Failed to load Gemini SDK:', err);
       genAI = null;
@@ -131,6 +147,7 @@ export async function generatePassage(
   // Validate
   const validation = validatePassage(passage, schema);
   if (validation.valid) {
+    passageCache.set(getCacheKey(schema.challengeId, audience, difficulty), passage);
     TelemetryService.record('PASSAGE_GENERATION_SUCCESS', schema.challengeId, {
       audience,
       difficulty,
@@ -159,6 +176,7 @@ export async function generatePassage(
 
   const retryValidation = validatePassage(retryPassage, schema);
   if (retryValidation.valid) {
+    passageCache.set(getCacheKey(schema.challengeId, audience, difficulty), retryPassage);
     TelemetryService.record('PASSAGE_GENERATION_SUCCESS', schema.challengeId, {
       audience,
       difficulty,

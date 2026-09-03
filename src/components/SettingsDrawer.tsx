@@ -15,7 +15,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   onClose,
   onProfileReset,
 }) => {
-  const { profile, setAudience, setDifficulty, resetProfile } = useLearnerStore();
+  const { profile, setAudience, setDifficulty, setAiEnabled, resetProfile } = useLearnerStore();
   const aiReady = isAIAvailable();
 
   if (!isOpen || !profile) return null;
@@ -131,35 +131,60 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
           </div>
         </div>
 
-        {/* AI Engine Status Card */}
-        <div className="mb-6 p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
-          <div className="flex items-center gap-2 mb-2">
-            <Cpu className="w-4 h-4 text-indigo-400" />
-            <span className="text-xs font-mono uppercase tracking-wider text-slate-300 font-semibold">
-              AI Generation Engine
-            </span>
+        {/* Setting 3: AI Dynamic Generation Toggle */}
+        <div className="mb-6 p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-indigo-400" />
+              <span className="text-xs font-mono uppercase tracking-wider text-slate-300 font-semibold">
+                AI Generation Engine
+              </span>
+            </div>
+            {/* Toggle Switch */}
+            <button
+              onClick={() => setAiEnabled(profile.aiEnabled === false ? true : false)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                profile.aiEnabled !== false ? 'bg-indigo-600' : 'bg-slate-700'
+              }`}
+              title={profile.aiEnabled !== false ? 'Disable AI Generation' : 'Enable AI Generation'}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  profile.aiEnabled !== false ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
           </div>
-          <div className="flex items-center gap-2 mb-1.5">
-            {aiReady ? (
+
+          <div className="flex items-center gap-2 mb-2">
+            {profile.aiEnabled !== false && aiReady ? (
               <>
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 <span className="text-xs font-mono text-emerald-300 font-semibold">
-                  Connected (Gemini 2.0 Flash)
+                  Active (Gemini 2.5 Flash Lite)
+                </span>
+              </>
+            ) : !aiReady ? (
+              <>
+                <AlertCircle className="w-4 h-4 text-amber-400" />
+                <span className="text-xs font-mono text-amber-300 font-semibold">
+                  API Key Missing (Deterministic Fallback)
                 </span>
               </>
             ) : (
               <>
-                <AlertCircle className="w-4 h-4 text-amber-400" />
-                <span className="text-xs font-mono text-amber-300 font-semibold">
-                  Fallback Mode (Local Passages Active)
+                <span className="w-2 h-2 rounded-full bg-slate-400" />
+                <span className="text-xs font-mono text-slate-300 font-semibold">
+                  Disabled (Pure Deterministic Passages)
                 </span>
               </>
             )}
           </div>
+
           <p className="text-[10px] text-slate-400 leading-relaxed">
-            {aiReady
-              ? 'Passages are dynamically generated and validated against the deterministic puzzle schema.'
-              : 'Pre-authored, verified passages matching your selected reading difficulty are served locally.'}
+            {profile.aiEnabled !== false && aiReady
+              ? 'Ultra-fast AI generates personalized variations calibrated to your reading level with in-memory caching.'
+              : 'Deterministic mode active. Hand-crafted, verified passages are served with 0 latency.'}
           </p>
         </div>
 
