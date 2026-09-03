@@ -3,11 +3,12 @@ import { ReadingPanel } from './components/ReadingPanel';
 import { StageViewport } from './components/StageViewport';
 import { InventoryBar } from './components/InventoryBar';
 import { FeedbackBanner } from './components/FeedbackBanner';
+import { VictoryModal } from './components/VictoryModal';
 import { useGameStore } from './engine/GameStore';
 import { Compass, RotateCcw } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const { resetCurrentChallenge } = useGameStore();
+  const { resetCurrentChallenge, currentChallengeIndex } = useGameStore();
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#070a11] text-slate-100 overflow-hidden select-none">
@@ -22,10 +23,11 @@ export const App: React.FC = () => {
               Text Physics
             </h1>
             <span className="text-[10px] text-slate-400 font-sans tracking-wide block -mt-0.5">
-              The Lost Observatory — Phase 1 Proof Spike
+              The Lost Observatory — Stage {currentChallengeIndex + 1} of 6
             </span>
           </div>
         </div>
+
 
         <div className="flex items-center gap-3">
           <button
@@ -64,8 +66,12 @@ export const App: React.FC = () => {
       <footer className="shrink-0 z-20">
         <InventoryBar />
       </footer>
+
+      {/* Completion & Victory Modal */}
+      <VictoryModal />
     </div>
   );
 };
+
 
 export default App;

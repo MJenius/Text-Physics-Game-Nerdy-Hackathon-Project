@@ -42,10 +42,12 @@ export interface GameRule {
   };
   onFailure: {
     feedbackMessage: string;
+    effects?: RuleEffect[];
     soundEffect?: string;
     autoReset?: boolean;
     brokenConditionIndex?: number;
   };
+
 }
 
 export interface Passage {
