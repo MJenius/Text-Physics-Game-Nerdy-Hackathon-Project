@@ -4,14 +4,7 @@ import { Sparkles, RotateCcw, Clock, Target, BookOpen, Award } from 'lucide-reac
 import confetti from 'canvas-confetti';
 
 export const VictoryModal: React.FC = () => {
-  const {
-    hasWonGame,
-    totalAttempts,
-    failedAttempts,
-    rereadCount,
-    sessionStartTime,
-    restartFullGame
-  } = useGameStore();
+  const { hasWonGame, sessionStartTime } = useGameStore();
 
   React.useEffect(() => {
     if (hasWonGame) {
@@ -44,7 +37,13 @@ export const VictoryModal: React.FC = () => {
 
   if (!hasWonGame) return null;
 
-  const durationSec = Math.round((Date.now() - sessionStartTime) / 1000);
+  return <VictoryModalContent sessionStartTime={sessionStartTime} />;
+};
+
+const VictoryModalContent: React.FC<{ sessionStartTime: number }> = ({ sessionStartTime }) => {
+  const { totalAttempts, failedAttempts, rereadCount, restartFullGame } = useGameStore();
+  const [durationSec] = React.useState(() => Math.max(1, Math.round((Date.now() - sessionStartTime) / 1000)));
+
   const minutes = Math.floor(durationSec / 60);
   const seconds = durationSec % 60;
   const timeFormatted = `${minutes}m ${seconds < 10 ? '0' : ''}${seconds}s`;

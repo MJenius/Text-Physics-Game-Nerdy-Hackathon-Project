@@ -9,6 +9,9 @@ export type LocationId =
   | 'dome'
   | 'submersible_delta'
   | 'boreas_station'
+  | 'vestibule'
+  | 'generator_room'
+  | 'radio_room'
   | 'orbital_module';
 
 export type ChallengeId = string;
@@ -212,6 +215,9 @@ export interface WorldState {
 
 export interface PlayerAction {
   type:
+    | 'PUSH'
+    | 'TURN'
+    | 'PULL'
     | 'USE_ITEM_ON'
     | 'ACTIVATE'
     | 'INSPECT'
@@ -223,7 +229,8 @@ export interface PlayerAction {
     | 'SORT_ITEM'
     | 'TIMELINE_ORDER'
     | 'DIALOGUE_CHOOSE'
-    | 'REPAIR_ASSEMBLE';
+    | 'REPAIR_ASSEMBLE'
+    | 'SYNTHESIS_COMMIT';
   sourceId?: EntityId;
   targetId: EntityId;
   payload?: any;
@@ -314,6 +321,50 @@ export interface AssemblyComponent {
   requiredPrecedingComponentId?: string;
 }
 
+export interface EvidenceClaim {
+  id: string;
+  claimText: string;
+  claimSource: string;
+  isTrue: boolean;
+  requiredProofSnippetId: string;
+  invalidDistractorSnippetIds?: string[];
+  downstreamFact?: string;
+}
+
+export interface EvidenceSnippet {
+  id: string;
+  documentTitle: string;
+  snippetText: string;
+  authorOrDate?: string;
+}
+
+export interface EvidenceConfig {
+  claims: EvidenceClaim[];
+  snippets: EvidenceSnippet[];
+  instructionSnippet: string;
+}
+
+export interface SynthesisParameter {
+  id: string;
+  name: string;
+  unit: string;
+  minValue: number;
+  maxValue: number;
+  step: number;
+  initialValue: number;
+  targetValue: number;
+  tolerance: number;
+  derivationHint: string;
+  subsystemLabel: string;
+}
+
+export interface SynthesisConfig {
+  apparatusTitle: string;
+  instructionSnippet: string;
+  parameters: SynthesisParameter[];
+  mutualExclusionWarning?: string;
+}
+
 export interface Challenge {
   id: ChallengeId;
   order: number;
@@ -361,4 +412,6 @@ export interface Challenge {
     components: AssemblyComponent[];
     slotsCount: number;
   };
+  evidenceConfig?: EvidenceConfig;
+  synthesisConfig?: SynthesisConfig;
 }

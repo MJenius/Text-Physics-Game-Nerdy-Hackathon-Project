@@ -29,6 +29,9 @@ import { TelemetryService } from './Telemetry';
 import { GameDirector } from './GameDirector';
 import { SoundFX } from './SoundFX';
 import { TRITON_TRANSFER_SCENARIO } from '../content/heroTransferScenario';
+import { ARCTIC_SCENES, ARCTIC_ENTITIES, ARCTIC_RULES } from '../content/arcticCampaign';
+import { TRITON_SCENES, TRITON_ENTITIES, TRITON_RULES } from '../content/tritonCampaign';
+import { getWorldDefinition } from '../worlds/worldRegistry';
 import type { WorldId } from '../worlds/worldTypes';
 
 interface GameStore extends WorldState {
@@ -52,7 +55,7 @@ interface GameStore extends WorldState {
   // Actions
   selectInventoryItem: (id: EntityId | null) => void;
   executeAction: (action: PlayerAction) => void;
-  executeDecision: (decisionId: string) => void;
+  executeDecision: (decisionId: string, value?: any) => void;
   transitionToScene: (sceneId: string) => void;
   resetCurrentChallenge: () => void;
   recordReread: () => void;
@@ -120,7 +123,19 @@ const INITIAL_NARRATIVE: NarrativeWorldState = {
   activeWorldId: 'lost_observatory'
 };
 
+export const ALL_WORLD_SCENES: Record<string, Challenge> = {
+  ...CAMPAIGN_SCENES,
+  ...ARCTIC_SCENES,
+  ...TRITON_SCENES
+};
+
 const getSceneEntities = (sceneId: string): Record<string, any> => {
+  if (sceneId.startsWith('arctic_')) {
+    return JSON.parse(JSON.stringify(ARCTIC_ENTITIES));
+  }
+  if (sceneId.startsWith('triton_')) {
+    return JSON.parse(JSON.stringify(TRITON_ENTITIES));
+  }
   switch (sceneId) {
     case 'act_1_vestibule':
       return JSON.parse(JSON.stringify(ACT1_ENTITIES));
@@ -142,9 +157,13 @@ const getSceneEntities = (sceneId: string): Record<string, any> => {
 };
 
 const getInitialSceneState = (sceneId: string = 'act_1_vestibule') => {
-  const challenge = CAMPAIGN_SCENES[sceneId] || CAMPAIGN_SCENES['act_1_vestibule'];
+  const challenge = ALL_WORLD_SCENES[sceneId] || CAMPAIGN_SCENES['act_1_vestibule'];
   const entities = getSceneEntities(challenge.id);
-  const inventory = ['iron_key'];
+  const inventory = sceneId.startsWith('arctic_')
+    ? []
+    : sceneId.startsWith('triton_')
+    ? []
+    : ['iron_key'];
 
   return {
     currentChallengeIndex: challenge.order - 1,
@@ -162,7 +181,7 @@ const getInitialSceneState = (sceneId: string = 'act_1_vestibule') => {
     physicalConsequence: undefined,
     lastFeedback: {
       type: 'info' as const,
-      message: `Entered ${challenge.title}. Consult the Field Journal and documents to formulate your interpretation.`,
+      message: `Entered ${challenge.title}. Consult the documents and logbooks to formulate your interpretation.`,
       timestamp: Date.now()
     }
   };
@@ -234,64 +253,109 @@ export const useGameStore = create<GameStore>()(
         TelemetryService.record('REREAD_RECORDED', get().currentChallengeId);
       },
 
-      executeDecision: (decisionId: string) => {
+      executeDecision: (decisionId: string, value?: any) => {
         const state = get();
-        const decision = state.currentChallenge.availableDecisions?.find((d) => d.id === decisionId);
-        if (!decision) return;
+        // 1. Try finding decision in current challenge or globally
+        let decision = state.currentChallenge.availableDecisions?.find(
+          (d) =>
+            d.id === decisionId ||
+            d.id === value ||
+            d.effects.some((e) => e.type === 'RECORD_DECISION' && e.target === decisionId && e.value === value)
+        );
 
-        set((draft) => {
-          // Execute all effects associated with this meaningful player decision
-          for (const effect of decision.effects) {
-            if (effect.type === 'RECORD_DECISION') {
-              draft.narrative.playerDecisions[effect.target] = {
-                value: effect.value,
-                rationale: effect.rationale,
-                timestamp: Date.now(),
-                act: draft.currentAct
-              };
-            } else if (effect.type === 'POWER_SYSTEM') {
-              if (!draft.narrative.poweredSystems.includes(effect.target as any)) {
-                draft.narrative.poweredSystems.push(effect.target as any);
-              }
-            } else if (effect.type === 'DISCOVER_FACT') {
-              if (!draft.narrative.discoveredFacts.includes(effect.value as string)) {
-                draft.narrative.discoveredFacts.push(effect.value as string);
-              }
-            } else if (effect.type === 'SET_FLAG') {
-              draft.flags[effect.target] = effect.value;
+        if (!decision) {
+          for (const scene of Object.values(ALL_WORLD_SCENES)) {
+            const found = scene.availableDecisions?.find(
+              (d) =>
+                d.id === decisionId ||
+                d.id === value ||
+                d.effects.some((e) => e.type === 'RECORD_DECISION' && e.target === decisionId && e.value === value)
+            );
+            if (found) {
+              decision = found;
+              break;
             }
           }
+        }
 
-          draft.lastFeedback = {
-            type: 'info',
-            message: `Decision Committed: ${decision.label}. The world state updates accordingly.`,
-            timestamp: Date.now()
-          };
+        set((draft) => {
+          if (decision) {
+            for (const effect of decision.effects) {
+              if (effect.type === 'RECORD_DECISION') {
+                draft.narrative.playerDecisions[effect.target] = {
+                  value: effect.value,
+                  rationale: effect.rationale,
+                  timestamp: Date.now(),
+                  act: draft.currentAct
+                };
+              } else if (effect.type === 'POWER_SYSTEM') {
+                if (!draft.narrative.poweredSystems.includes(effect.target as any)) {
+                  draft.narrative.poweredSystems.push(effect.target as any);
+                }
+              } else if (effect.type === 'MODIFY_RELATIONSHIP') {
+                const currentRel = draft.narrative.characterRelationships[effect.target] ?? 50;
+                draft.narrative.characterRelationships[effect.target] = Math.min(
+                  100,
+                  Math.max(0, currentRel + Number(effect.value))
+                );
+              } else if (effect.type === 'DISCOVER_FACT') {
+                if (!draft.narrative.discoveredFacts.includes(effect.value as string)) {
+                  draft.narrative.discoveredFacts.push(effect.value as string);
+                }
+              } else if (effect.type === 'SET_FLAG') {
+                draft.flags[effect.target] = effect.value;
+              }
+            }
 
-          draft.physicalConsequence = {
-            visualEffect: 'gear_shudder',
-            description: decision.downstreamHint,
-            timestamp: Date.now()
-          };
+            draft.lastFeedback = {
+              type: 'info',
+              message: `Decision Committed: ${decision.label}. The world state updates accordingly.`,
+              timestamp: Date.now()
+            };
 
-          TelemetryService.record('MEANINGFUL_DECISION_COMMITTED', draft.currentChallengeId, {
-            decisionId,
-            label: decision.label,
-            rationale: decision.rationaleWhy
-          });
+            draft.physicalConsequence = {
+              visualEffect: 'gear_shudder',
+              description: decision.downstreamHint,
+              timestamp: Date.now()
+            };
+
+            TelemetryService.record('MEANINGFUL_DECISION_COMMITTED', draft.currentChallengeId, {
+              decisionId,
+              label: decision.label,
+              rationale: decision.rationaleWhy
+            });
+          } else if (value !== undefined) {
+            draft.narrative.playerDecisions[decisionId] = {
+              value,
+              rationale: 'Direct player choice committed',
+              timestamp: Date.now(),
+              act: draft.currentAct
+            };
+            if (decisionId === 'power_allocation') {
+              if (value === 'laboratory') {
+                draft.narrative.poweredSystems = ['laboratory'];
+              } else if (value === 'archive') {
+                draft.narrative.poweredSystems = ['archive'];
+              }
+            } else if (decisionId === 'act1_path_choice' && value === 'aqueduct_flume') {
+              draft.narrative.characterRelationships['aris'] = 65;
+            } else if (decisionId === 'aris_alliance_stance' && value === 'collaborative_ally') {
+              draft.narrative.characterRelationships['aris'] = 75;
+            }
+          }
         });
 
         // If this decision contains a scene transition effect, transition seamlessly!
-        const transitionEffect = decision.effects.find((e) => e.type === 'TRANSITION_SCENE');
-        if (transitionEffect && typeof transitionEffect.target === 'string') {
-          setTimeout(() => {
+        if (decision) {
+          const transitionEffect = decision.effects.find((e) => e.type === 'TRANSITION_SCENE');
+          if (transitionEffect && typeof transitionEffect.target === 'string') {
             get().transitionToScene(transitionEffect.target);
-          }, 400);
+          }
         }
       },
 
       transitionToScene: (sceneId: string) => {
-        const nextScene = CAMPAIGN_SCENES[sceneId];
+        const nextScene = ALL_WORLD_SCENES[sceneId];
         if (!nextScene) return;
 
         set((draft) => {
@@ -352,8 +416,14 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         const currentScene = state.currentChallenge;
 
-        // If scene has explicit branching decisions, player must select a decision!
-        if (currentScene.availableDecisions && currentScene.availableDecisions.length > 0) {
+        // If scene has explicit branching decisions, player must select a decision before proceeding!
+        const hasChosenDecision = currentScene.availableDecisions?.some((d) =>
+          d.effects.some(
+            (e) => e.type === 'RECORD_DECISION' && state.narrative.playerDecisions[e.target] !== undefined
+          )
+        );
+
+        if (currentScene.availableDecisions && currentScene.availableDecisions.length > 0 && !hasChosenDecision) {
           set((draft) => {
             draft.lastFeedback = {
               type: 'info',
@@ -364,7 +434,28 @@ export const useGameStore = create<GameStore>()(
           return;
         }
 
-        // Automatic story arc progression
+        // Arctic progression
+        if (currentScene.id === 'arctic_act_1_airlock') {
+          get().transitionToScene('arctic_act_2_thermal');
+          return;
+        } else if (currentScene.id === 'arctic_act_2_thermal') {
+          get().transitionToScene('arctic_act_3_stratigraphy');
+          return;
+        } else if (currentScene.id === 'arctic_act_3_stratigraphy') {
+          get().transitionToScene('arctic_act_4_radio');
+          return;
+        }
+
+        // Triton progression
+        if (currentScene.id === 'triton_act_1_vapor') {
+          get().transitionToScene('triton_act_2_cavitation');
+          return;
+        } else if (currentScene.id === 'triton_act_2_cavitation') {
+          get().transitionToScene('triton_act_3_scram');
+          return;
+        }
+
+        // Victorian story arc progression
         let nextSceneId = 'act_7_dome';
         if (currentScene.id === 'act_1_vestibule') {
           nextSceneId = 'act_2_clock';
@@ -503,15 +594,27 @@ export const useGameStore = create<GameStore>()(
       },
 
       setWorld: (worldId: WorldId) => {
+        const worldDef = getWorldDefinition(worldId);
+        const startingSceneId =
+          worldDef.startingSceneId ||
+          (worldId === 'arctic_station'
+            ? 'arctic_act_1_airlock'
+            : worldId === 'triton_deep_sea'
+            ? 'triton_act_1_vapor'
+            : 'act_1_vestibule');
+
+        const fresh = getInitialSceneState(startingSceneId);
         set((draft) => {
+          Object.assign(draft, fresh);
           draft.narrative.activeWorldId = worldId;
           draft.lastFeedback = {
             type: 'info',
-            message: `World Attunement shifted to ${worldId.replace(/_/g, ' ').toUpperCase()}.`,
+            message: `World Attunement shifted to ${worldDef.name.toUpperCase()}. ${worldDef.tagline}.`,
             timestamp: Date.now()
           };
         });
-        TelemetryService.record('WORLD_CHANGED', get().currentChallengeId, { worldId });
+        get().loadAdaptedPassage();
+        TelemetryService.record('WORLD_CHANGED', startingSceneId, { worldId });
       },
 
       updateTrust: (charId: string, delta: number) => {
@@ -642,7 +745,7 @@ export const useGameStore = create<GameStore>()(
             const otherTargetId = action.targetId === 'archive_power_switch' ? 'hydraulic_power_switch' : 'archive_power_switch';
             const otherEntity = draft.entities[otherTargetId];
 
-            const willBeEngaged = !Boolean(targetEntity.states.isEngaged);
+            const willBeEngaged = !targetEntity.states.isEngaged;
             targetEntity.states.isEngaged = willBeEngaged;
 
             // Check if BOTH switches are engaged simultaneously (Exclusion breach: 80kW + 80kW = 160kW > 100kW!)
@@ -696,13 +799,18 @@ export const useGameStore = create<GameStore>()(
         // 2. Query Candidate Rules
         const allAvailableRules = state.isTransferModeActive
           ? [...TRITON_TRANSFER_SCENARIO.rules]
-          : ALL_CAMPAIGN_RULES;
+          : [...ALL_CAMPAIGN_RULES, ...ARCTIC_RULES, ...TRITON_RULES];
 
         const relevantRules = allAvailableRules.filter((r) => {
           if (r.challengeId !== state.currentChallengeId) return false;
-          if (r.action !== action.type) return false;
           if (r.targetId !== action.targetId) return false;
           if (action.sourceId && r.sourceId !== action.sourceId) return false;
+          if (r.action !== action.type) {
+            const physicalInteractions = ['PUSH', 'TURN', 'PULL', 'ACTIVATE'];
+            if (!(r.action === 'ACTIVATE' && physicalInteractions.includes(action.type))) {
+              return false;
+            }
+          }
           return true;
         });
 

@@ -20,6 +20,14 @@ import { CalibrateArchetype } from './archetypes/CalibrateArchetype';
 import { RouteWiringArchetype } from './archetypes/RouteWiringArchetype';
 import { DialogueArchetype } from './archetypes/DialogueArchetype';
 import { RepairAssemblyArchetype } from './archetypes/RepairAssemblyArchetype';
+import { TimelineArchetype } from './archetypes/TimelineArchetype';
+import { SortClassifyArchetype } from './archetypes/SortClassifyArchetype';
+import { ResourceManagementArchetype } from './archetypes/ResourceManagementArchetype';
+import { InvestigationArchetype } from './archetypes/InvestigationArchetype';
+import { SearchForensicsArchetype } from './archetypes/SearchForensicsArchetype';
+import { NavigationArchetype } from './archetypes/NavigationArchetype';
+import { EvidenceArchetype } from './archetypes/EvidenceArchetype';
+import { SynthesisArchetype } from './archetypes/SynthesisArchetype';
 
 export const StageViewport: React.FC = () => {
   const {
@@ -248,6 +256,20 @@ export const StageViewport: React.FC = () => {
 
     return (
       <div className="w-full max-w-xl flex flex-col items-center gap-4 font-serif">
+        {/* Downstream Ripple from Act I Entry Route Decision */}
+        {(narrative.playerDecisions['act1_path_choice']?.value === 'hydraulics' || narrative.playerDecisions['act1_path_choice']?.value === 'aqueduct_flume') && (
+          <div className="w-full p-3 rounded-xl bg-cyan-950/60 border border-cyan-700/60 text-cyan-200 text-xs font-serif flex items-center justify-between shadow-md">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-cyan-400 font-bold">🌊 Aqueduct Route Consequence:</span>
+            <span>Flooded conduits diverted; found Aris’s soaked maintenance docket on workbench (+15 Trust).</span>
+          </div>
+        )}
+        {(narrative.playerDecisions['act1_path_choice']?.value === 'clock_tower' || narrative.playerDecisions['act1_path_choice']?.value === 'grand_portal') && (
+          <div className="w-full p-3 rounded-xl bg-stone-900 border border-amber-900/60 text-amber-200 text-xs font-serif flex items-center justify-between shadow-md">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-amber-400 font-bold">🏛️ Grand Portal Route Consequence:</span>
+            <span>Entered via formal vestibule; horological tower remains dry and dust-free.</span>
+          </div>
+        )}
+
         <CalibrateArchetype
           title="Great Sidereal Clock Pendulum"
           variableName="Escapement Cadence"
@@ -359,9 +381,24 @@ export const StageViewport: React.FC = () => {
   // ──────────────────────────────────────────────────────────────────────────
   const renderAct4Dialogue = () => {
     const config = currentChallenge.dialogueConfig;
+    const powerRoute = narrative.playerDecisions['power_allocation']?.value;
 
     return (
       <div className="w-full max-w-xl flex flex-col items-center gap-4 font-serif">
+        {/* Downstream Ripple from Act III Power Allocation Decision */}
+        {powerRoute === 'archive' && (
+          <div className="w-full p-3 rounded-xl bg-amber-950/60 border border-amber-700/60 text-amber-200 text-xs font-serif shadow-md">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-amber-400 block font-bold">⚡ Power Allocation Consequence:</span>
+            <span>Archive Document Gallery is brightly lit. Aris is disgruntled over his cold, unpowered workshop.</span>
+          </div>
+        )}
+        {powerRoute === 'laboratory' && (
+          <div className="w-full p-3 rounded-xl bg-cyan-950/60 border border-cyan-700/60 text-cyan-200 text-xs font-serif shadow-md">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-cyan-400 block font-bold">⚡ Power Allocation Consequence:</span>
+            <span>Hydraulic core elevator is energized with 150 PSI steam. Aris respects your practical priority.</span>
+          </div>
+        )}
+
         <DialogueArchetype
           characterName={config?.characterName || 'Chief Machinist Aris'}
           characterTitle="Head of Mountain Engineering & Maintenance"
@@ -377,17 +414,7 @@ export const StageViewport: React.FC = () => {
           }}
         />
 
-        {Boolean(useGameStore.getState().flags['act4_navigation_complete']) && (
-          <div className="pt-2 flex justify-center animate-in fade-in">
-            <button
-              type="button"
-              onClick={advanceToNextChallenge}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-mono font-bold cursor-pointer shadow-lg"
-            >
-              Ascend to Concourse & Relay Room <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+        {Boolean(useGameStore.getState().flags['act4_navigation_complete']) && renderDecisionCards()}
       </div>
     );
   };
@@ -399,19 +426,34 @@ export const StageViewport: React.FC = () => {
     const shuntState = (entities['emergency_telemetry_terminal']?.states?.shuntState as string) || 'BURNED';
     const isComplete = shuntState === 'RESTORED';
     const powerRoute = narrative.playerDecisions['power_allocation']?.value;
+    const arisStance = narrative.playerDecisions['aris_alliance_stance']?.value;
 
     return (
       <div className="w-full max-w-xl flex flex-col items-center gap-4 font-serif">
-        {/* Sector Status Banner showing ripple effects */}
-        <div className="w-full p-4 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-between text-xs font-mono">
+        {/* Sector Status Banner showing ripple effects from Act III */}
+        <div className="w-full p-3 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-between text-xs font-mono">
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-amber-400" />
-            <span>Sector Status:</span>
+            <span>Power Routing Ripple:</span>
           </div>
           <span className="text-amber-300 font-bold uppercase">
-            {powerRoute === 'laboratory' ? 'Laboratory Powered • Archive in Darkness' : 'Archive Powered • Elevator Depowered'}
+            {powerRoute === 'laboratory' ? 'Laboratory Powered • Elevator Operational' : 'Archive Powered • Elevator Offline (Stairs Only)'}
           </span>
         </div>
+
+        {/* Downstream Ripple from Act IV Aris Alliance Stance */}
+        {arisStance === 'collaborative_ally' && (
+          <div className="w-full p-3 rounded-xl bg-emerald-950/60 border border-emerald-700/60 text-emerald-200 text-xs font-serif flex items-center justify-between shadow-md">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-emerald-400 font-bold">🤝 Aris Alliance Active:</span>
+            <span>Aris advises over tube: "Bridge with a ceramic 20A shunt—copper will arc during roof petal haul!"</span>
+          </div>
+        )}
+        {arisStance === 'authoritative_investigator' && (
+          <div className="w-full p-3 rounded-xl bg-stone-900 border border-stone-800 text-stone-400 text-xs font-serif flex items-center justify-between shadow-md">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-rose-400 font-bold">⚠️ Mechanical Isolation:</span>
+            <span>Speaking tube is silent. You must determine the shunt rating independently.</span>
+          </div>
+        )}
 
         <RepairAssemblyArchetype
           title="Dome Relay Terminal Safety Shunt"
@@ -456,12 +498,24 @@ export const StageViewport: React.FC = () => {
     const isClockSynced = Boolean(entities['star_clock_sync_switch']?.states?.isSynchronized);
     const hasPrism = Boolean(entities['quartz_receptacle']?.states?.hasPrism);
     const isDomeOpen = Boolean(entities['master_aperture_lever']?.states?.isDomeOpen);
+    const powerRoute = narrative.playerDecisions['power_allocation']?.value;
+    const arisStance = narrative.playerDecisions['aris_alliance_stance']?.value;
 
     return (
       <div className="w-full max-w-xl flex flex-col items-center font-serif">
         <div className="relative w-full rounded-2xl border-4 border-amber-600/50 bg-[#0c1017] p-6 shadow-2xl">
           <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-950 border border-amber-600 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-amber-300 uppercase shadow">
             Master Celestial Rotunda — Mount Caelum Summit
+          </div>
+
+          {/* Persistent Decision Ripple Indicators */}
+          <div className="grid grid-cols-2 gap-2 text-[10px] font-mono my-2">
+            <div className={`p-2 rounded border ${powerRoute === 'archive' ? 'bg-amber-950/40 border-amber-600/60 text-amber-300' : 'bg-stone-900/60 border-stone-800 text-stone-500'}`}>
+              Stellar Astrometry Aid: {powerRoute === 'archive' ? 'Active (Assisted Aim)' : 'Offline (Manual Alignment)'}
+            </div>
+            <div className={`p-2 rounded border ${arisStance === 'collaborative_ally' ? 'bg-emerald-950/40 border-emerald-600/60 text-emerald-300' : 'bg-stone-900/60 border-stone-800 text-stone-500'}`}>
+              Remote Shutter Interlock: {arisStance === 'collaborative_ally' ? 'Aris Remote Dog Latch' : 'Manual Shutter Verification'}
+            </div>
           </div>
 
           {isDomeOpen ? (
@@ -564,8 +618,368 @@ export const StageViewport: React.FC = () => {
     );
   };
 
-  // Route viewport renderer based on active scene / archetype
+  // ──────────────────────────────────────────────────────────────────────────
+  // ARCTIC ACT I: AIRLOCK (Tactile Sequencing)
+  // ──────────────────────────────────────────────────────────────────────────
+  const renderArcticAirlock = () => {
+    const isHeated = Boolean(entities['thermal_dog_heater']?.states?.isHeated);
+    const isPurged = Boolean(entities['airlock_dump_valve']?.states?.isPurged);
+    const isOpen = Boolean(entities['lab_pressure_seal']?.states?.isOpen);
+
+    return (
+      <div className="w-full max-w-xl flex flex-col items-center font-serif">
+        <div className="relative w-full rounded-2xl border-4 border-sky-900 bg-[#07131e] p-6 shadow-2xl overflow-hidden">
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-sky-950 border border-sky-600 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-sky-300 uppercase shadow">
+            Boreas Sub-Zero Station • Outer Airlock (-48°C / 85 Knots)
+          </div>
+
+          <div className="min-h-[280px] w-full flex flex-col items-center justify-between py-2 space-y-4">
+            <div className="grid grid-cols-2 gap-4 w-full">
+              {/* Dog Heaters */}
+              <button
+                type="button"
+                onClick={() => handleTargetClick('thermal_dog_heater')}
+                className={`p-4 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
+                  isHeated ? 'bg-amber-950/40 border-amber-500 text-amber-200' : 'bg-stone-900 border-stone-700 hover:border-sky-400 text-stone-300'
+                }`}
+              >
+                <Wind className="w-8 h-8 text-sky-400" />
+                <span className="text-xs font-mono font-bold">Dog Latch Heaters</span>
+                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/40 border border-stone-800">
+                  {isHeated ? 'Heating Active (Thawed)' : 'Frozen Solid'}
+                </span>
+              </button>
+
+              {/* Barometric Dump Valve */}
+              <button
+                type="button"
+                onClick={() => handleTargetClick('airlock_dump_valve')}
+                className={`p-4 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
+                  isPurged ? 'bg-sky-950/40 border-sky-500 text-sky-200' : 'bg-stone-900 border-stone-700 hover:border-sky-400 text-stone-300'
+                }`}
+              >
+                <Zap className="w-8 h-8 text-sky-400" />
+                <span className="text-xs font-mono font-bold">Barometric Dump Valve</span>
+                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/40 border border-stone-800">
+                  {isPurged ? 'Pressure Equalized' : 'High Differential'}
+                </span>
+              </button>
+            </div>
+
+            {/* Inner Lab Seal Door */}
+            <button
+              type="button"
+              onClick={() => handleTargetClick('lab_pressure_seal')}
+              className={`w-full py-4 rounded-xl border-2 font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                isOpen
+                  ? 'bg-emerald-950/40 border-emerald-500 text-emerald-200'
+                  : 'bg-stone-900 border-stone-700 hover:border-sky-400 text-stone-300'
+              }`}
+            >
+              <DoorClosed className="w-5 h-5" />
+              <span>{isOpen ? 'Inner Laboratory Seal: Open' : 'Actuate Inner Laboratory Pressure Seal'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="pt-2 flex justify-center animate-in fade-in">
+                <button
+                  type="button"
+                  onClick={advanceToNextChallenge}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-stone-950 text-xs font-mono font-bold cursor-pointer shadow-lg"
+                >
+                  Enter Subterranean Permafrost Hub <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // ARCTIC ACT II: THERMAL SIPHON (Resource Budget Balancing)
+  // ──────────────────────────────────────────────────────────────────────────
+  const renderArcticThermal = () => {
+    return (
+      <div className="w-full max-w-xl flex flex-col items-center font-serif">
+        <ResourceManagementArchetype
+          title="Diesel Generator Thermal Siphon"
+          totalBudgetUnits={85}
+          unitLabel="kW"
+          instructionSnippet="Allocate the 85 kW diesel thermal budget. Pre-Heater needs min 25 kW, Cryostat min 30 kW, Quarters min 30 kW."
+          resources={[
+            { id: 'preheater', name: 'Diesel Fuel Pre-Heater', currentUnits: 25, minUnits: 25, maxUnits: 40, unitLabel: 'kW', description: 'Below 25 kW, paraffin wax crystallizes.' },
+            { id: 'cryostat', name: 'Core Cryostat Cooler', currentUnits: 30, minUnits: 30, maxUnits: 45, unitLabel: 'kW', description: 'Below 30 kW, prehistoric ice cores melt.' },
+            { id: 'quarters', name: 'Crew Living Quarters', currentUnits: 30, minUnits: 30, maxUnits: 45, unitLabel: 'kW', description: 'Below 30 kW, hypothermia risk surges.' }
+          ]}
+          onCommitAllocation={(_allocations, isValid) => {
+            if (isValid) {
+              useGameStore.setState((draft) => {
+                draft.flags['arctic_thermal_balanced'] = true;
+                draft.isComplete = true;
+              });
+            }
+          }}
+        />
+        {Boolean(useGameStore.getState().flags['arctic_thermal_balanced']) && renderDecisionCards()}
+      </div>
+    );
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // TRITON ACT I: VAPOR LOCK PURGE (Tactile Piping Routing)
+  // ──────────────────────────────────────────────────────────────────────────
+  const renderTritonVapor = () => {
+    const isBypassOpen = Boolean(entities['vapor_bypass_valve']?.states?.isOpen);
+    const isPumpRunning = Boolean(entities['recirc_pump_switch']?.states?.isRunning);
+    const tempC = (entities['core_temp_monitor']?.states?.tempC as number) || 480;
+
+    return (
+      <div className="w-full max-w-xl flex flex-col items-center font-serif">
+        <div className="relative w-full rounded-2xl border-4 border-cyan-900 bg-[#04151b] p-6 shadow-2xl overflow-hidden">
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-cyan-950 border border-cyan-500 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-cyan-300 uppercase shadow">
+            Station Triton-IV • Reactor Delta (Depth 6,000m • 600 atm)
+          </div>
+
+          <div className="flex items-center justify-between border-b border-cyan-900/60 pb-3 mb-4 font-mono text-xs">
+            <span className="text-cyan-400">CORE TEMPERATURE:</span>
+            <span className={`px-2 py-0.5 rounded font-bold ${
+              tempC <= 100 ? 'bg-cyan-950 text-cyan-300 border border-cyan-500' : tempC <= 260 ? 'bg-amber-950 text-amber-300 border border-amber-500' : 'bg-rose-950 text-rose-300 border border-rose-500 animate-pulse'
+            }`}>
+              {tempC}°C • {tempC <= 260 ? 'COOLING FLOW ACTIVE' : 'RUNAWAY SURGE'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 my-3">
+            {/* Vapor Bypass Valve Handwheel */}
+            <button
+              type="button"
+              onClick={() => handleTargetClick('vapor_bypass_valve')}
+              className={`p-4 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
+                isBypassOpen ? 'bg-cyan-950/40 border-cyan-500 text-cyan-200' : 'bg-stone-900 border-stone-700 hover:border-cyan-400 text-stone-300'
+              }`}
+            >
+              <Wind className="w-8 h-8 text-cyan-400" />
+              <span className="text-xs font-mono font-bold">Vapor Bypass Valve</span>
+              <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/40 border border-stone-800">
+                {isBypassOpen ? 'Bypass Vented (Safe)' : 'Closed (Vapor Locked)'}
+              </span>
+            </button>
+
+            {/* Recirculation Pump */}
+            <button
+              type="button"
+              onClick={() => handleTargetClick('recirc_pump_switch')}
+              className={`p-4 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
+                isPumpRunning ? 'bg-cyan-950/40 border-cyan-500 text-cyan-200' : 'bg-stone-900 border-stone-700 hover:border-cyan-400 text-stone-300'
+              }`}
+            >
+              <Zap className="w-8 h-8 text-cyan-400" />
+              <span className="text-xs font-mono font-bold">Recirculation Pump</span>
+              <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/40 border border-stone-800">
+                {isPumpRunning ? 'Laminar Flow Running' : 'Pump Stopped'}
+              </span>
+            </button>
+          </div>
+
+          {isPumpRunning && renderDecisionCards()}
+        </div>
+      </div>
+    );
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // DYNAMIC ARCHETYPE ROUTER (Full 12-Archetype Engine)
+  // ──────────────────────────────────────────────────────────────────────────
   const renderActiveScene = () => {
+    // 1. World Specific Scenes
+    if (currentChallenge.id === 'arctic_act_1_airlock') return renderArcticAirlock();
+    if (currentChallenge.id === 'arctic_act_2_thermal') return renderArcticThermal();
+    if (currentChallenge.id === 'triton_act_1_vapor') return renderTritonVapor();
+
+    // 2. Generic Archetype Route Handlers:
+    if (currentChallenge.archetype === 'EVIDENCE' && currentChallenge.evidenceConfig) {
+      return (
+        <div className="w-full max-w-xl flex flex-col items-center font-serif">
+          <EvidenceArchetype
+            title={currentChallenge.title}
+            instructionSnippet={currentChallenge.evidenceConfig.instructionSnippet}
+            claims={currentChallenge.evidenceConfig.claims}
+            snippets={currentChallenge.evidenceConfig.snippets}
+            onCommitEvidence={(_claimId, _snippetId, isSubstantiated) => {
+              if (isSubstantiated) {
+                useGameStore.setState((draft) => {
+                  draft.flags['triton_evidence_verified'] = true;
+                  draft.flags['evidence_verified'] = true;
+                  draft.isComplete = true;
+                });
+                advanceToNextChallenge();
+              }
+            }}
+          />
+        </div>
+      );
+    }
+
+    if (currentChallenge.archetype === 'SYNTHESIS' && currentChallenge.synthesisConfig) {
+      return (
+        <div className="w-full max-w-xl flex flex-col items-center font-serif">
+          <SynthesisArchetype
+            title={currentChallenge.synthesisConfig.apparatusTitle || currentChallenge.title}
+            instructionSnippet={currentChallenge.synthesisConfig.instructionSnippet}
+            parameters={currentChallenge.synthesisConfig.parameters}
+            mutualExclusionWarning={currentChallenge.synthesisConfig.mutualExclusionWarning}
+            onCommitSynthesis={(_values, isHarmonized) => {
+              if (isHarmonized) {
+                useGameStore.setState((draft) => {
+                  draft.flags['arctic_sos_transmitted'] = true;
+                  draft.flags['triton_scram_stabilized'] = true;
+                  draft.flags['synthesis_complete'] = true;
+                  draft.isComplete = true;
+                  draft.hasWonGame = true;
+                });
+                confetti({ particleCount: 100, spread: 80, origin: { y: 0.5 } });
+              }
+            }}
+          />
+        </div>
+      );
+    }
+
+    if (currentChallenge.archetype === 'SORT' && currentChallenge.sortConfig) {
+      return (
+        <div className="w-full max-w-xl flex flex-col items-center font-serif">
+          <SortClassifyArchetype
+            title={currentChallenge.title}
+            instructionSnippet="Sort each sample cylinder into its verified stratigraphical horizon."
+            categories={currentChallenge.sortConfig.categories}
+            items={currentChallenge.sortConfig.items}
+            onCommitSort={(_assignments, isCorrect) => {
+              if (isCorrect) {
+                useGameStore.setState((draft) => {
+                  draft.flags['arctic_cores_sorted'] = true;
+                  draft.isComplete = true;
+                });
+                advanceToNextChallenge();
+              }
+            }}
+          />
+        </div>
+      );
+    }
+
+    if (currentChallenge.archetype === 'TIMELINE' && currentChallenge.timelineConfig) {
+      return (
+        <div className="w-full max-w-xl flex flex-col items-center font-serif">
+          <TimelineArchetype
+            title={currentChallenge.title}
+            promptQuestion={currentChallenge.timelineConfig.promptQuestion}
+            events={currentChallenge.timelineConfig.events}
+            onCommitOrder={(_orderedIds, isChronological) => {
+              if (isChronological) {
+                useGameStore.setState((draft) => {
+                  draft.isComplete = true;
+                });
+                advanceToNextChallenge();
+              }
+            }}
+          />
+        </div>
+      );
+    }
+
+    if (currentChallenge.archetype === 'RESOURCE') {
+      return (
+        <div className="w-full max-w-xl flex flex-col items-center font-serif">
+          <ResourceManagementArchetype
+            title={currentChallenge.title}
+            totalBudgetUnits={100}
+            unitLabel="kW"
+            instructionSnippet="Balance resource demands to remain within the operational envelope."
+            resources={[
+              { id: 'ch1', name: 'Primary Channel', currentUnits: 40, minUnits: 20, maxUnits: 60, unitLabel: 'kW', description: 'Essential baseline load' },
+              { id: 'ch2', name: 'Secondary Channel', currentUnits: 30, minUnits: 20, maxUnits: 50, unitLabel: 'kW', description: 'Backup reserve circuit' },
+              { id: 'ch3', name: 'Auxiliary Channel', currentUnits: 30, minUnits: 10, maxUnits: 40, unitLabel: 'kW', description: 'Non-critical buffer bus' }
+            ]}
+            onCommitAllocation={(_alloc, isValid) => {
+              if (isValid) {
+                useGameStore.setState((draft) => {
+                  draft.isComplete = true;
+                });
+                advanceToNextChallenge();
+              }
+            }}
+          />
+        </div>
+      );
+    }
+
+    if (currentChallenge.archetype === 'SEARCH') {
+      return (
+        <div className="w-full max-w-xl flex flex-col items-center font-serif">
+          <SearchForensicsArchetype
+            title={currentChallenge.title}
+            sceneDescription="Inspect each physical hotspot to uncover forensic evidence."
+            hotspots={[
+              { id: 'h1', name: 'Inspection Port #1', observationText: 'Tool marks reveal forced mechanical shear.', isCrucialEvidence: true },
+              { id: 'h2', name: 'Inspection Port #2', observationText: 'Thermal discoloration confirms 400°C runaway surge.', isCrucialEvidence: true }
+            ]}
+            onHotspotInspected={(_id) => {}}
+            onCommitDeduction={(_clueIds) => {
+              useGameStore.setState((draft) => {
+                draft.isComplete = true;
+              });
+              advanceToNextChallenge();
+            }}
+          />
+        </div>
+      );
+    }
+
+    if (currentChallenge.archetype === 'NAVIGATION' && currentChallenge.id !== 'act_1_vestibule') {
+      return (
+        <div className="w-full max-w-xl flex flex-col items-center font-serif">
+          <NavigationArchetype
+            title={currentChallenge.title}
+            currentSectorName="Central Concourse"
+            instructionSnippet="Select an unlocked passage to proceed through the mountain facility."
+            availableRoutes={[
+              { id: 'door_north', name: 'North Passage', cardinalDirection: 'North', description: 'Summit route to Observatory Rotunda.', environmentalCondition: 'Safe & Lit', consequenceHint: 'Ascends toward the summit.' },
+              { id: 'door_east', name: 'East Passage', cardinalDirection: 'East', description: 'Heavy iron gate leading to Historical Archive.', environmentalCondition: 'Dark & Hazardous', consequenceHint: 'Leads to document vaults.' }
+            ]}
+            onSelectRoute={(_doorId) => {
+              useGameStore.setState((draft) => {
+                draft.isComplete = true;
+              });
+              advanceToNextChallenge();
+            }}
+          />
+        </div>
+      );
+    }
+
+    if (currentChallenge.archetype === 'INVESTIGATION') {
+      return (
+        <div className="w-full max-w-xl flex flex-col items-center font-serif">
+          <InvestigationArchetype
+            title={currentChallenge.title}
+            documents={currentChallenge.passage.documents || []}
+            hypotheses={[
+              { id: 'hyp_1', label: 'Primary Evidence Deduction', description: 'Correlate documented clues to confirm findings.', supportingDocIds: [] }
+            ]}
+            onSelectHypothesis={(_hypId) => {
+              useGameStore.setState((draft) => {
+                draft.isComplete = true;
+              });
+              advanceToNextChallenge();
+            }}
+          />
+        </div>
+      );
+    }
+
+    // 3. Victorian Campaign Scenes:
     switch (currentChallenge.id) {
       case 'act_1_vestibule':
         return renderAct1Vestibule();

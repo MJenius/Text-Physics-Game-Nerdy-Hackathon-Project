@@ -1,4 +1,7 @@
 import type { WorldId, WorldDefinition } from './worldTypes';
+import { CAMPAIGN_SCENES } from '../content/storyCampaign';
+import { ARCTIC_SCENES } from '../content/arcticCampaign';
+import { TRITON_SCENES } from '../content/tritonCampaign';
 
 export const WORLD_REGISTRY: Record<WorldId, WorldDefinition> = {
   lost_observatory: {
@@ -6,6 +9,8 @@ export const WORLD_REGISTRY: Record<WorldId, WorldDefinition> = {
     name: 'The Lost Observatory',
     tagline: 'Restoring Victorian Astronomy on Mount Caelum',
     era: 'Late 19th Century (1894)',
+    startingSceneId: 'act_1_vestibule',
+    scenes: CAMPAIGN_SCENES,
     settingDescription:
       'A sprawling mountain-top complex of copper domes, stone vaults, and brass gear-trains abandoned in panic during an ominous celestial alignment.',
     environmentalVocabulary: [
@@ -97,6 +102,8 @@ export const WORLD_REGISTRY: Record<WorldId, WorldDefinition> = {
     name: 'Boreas Sub-Zero Station',
     tagline: 'Permafrost Glaciology at 82° North',
     era: 'Mid 20th Century Cold War (1961)',
+    startingSceneId: 'arctic_act_1_airlock',
+    scenes: ARCTIC_SCENES,
     settingDescription:
       'A subterranean scientific research bunker drilled directly into Greenland permafrost, cut off by a category-5 katabatic blizzard with failing thermal conduits.',
     environmentalVocabulary: [
@@ -175,6 +182,8 @@ export const WORLD_REGISTRY: Record<WorldId, WorldDefinition> = {
     name: 'Triton-IV Trench Station',
     tagline: 'Abyssal Geothermal Triage at 6,000 Meters',
     era: 'Near-Future Sub-Oceanic (2042)',
+    startingSceneId: 'triton_act_1_vapor',
+    scenes: TRITON_SCENES,
     settingDescription:
       'A modular titanium research habitat anchored into the Marianas Trench floor alongside active hydrothermal black smokers, suffering a secondary coolant vapor lock.',
     environmentalVocabulary: [

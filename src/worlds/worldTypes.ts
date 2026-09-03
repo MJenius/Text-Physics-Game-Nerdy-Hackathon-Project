@@ -40,4 +40,6 @@ export interface WorldDefinition {
   themePalette: WorldThemePalette;
   narrativeConflicts: string[];
   defaultStartingAct: number;
+  startingSceneId?: string;
+  scenes?: Record<string, import('../types/game').Challenge>;
 }

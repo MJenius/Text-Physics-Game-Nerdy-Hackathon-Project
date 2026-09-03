@@ -663,6 +663,35 @@ export const ACT4_RULES: GameRule[] = [
   }
 ];
 
+export const ACT4_DECISIONS: DecisionOption[] = [
+  {
+    id: 'decision_ally_with_aris',
+    label: 'Form Alliance with Chief Machinist Aris',
+    description: 'Pledge solidarity with Aris against administrative blame and agree that bedrock faulting is the real threat.',
+    rationaleWhy: 'Engineering truth over institutional fear: the physical structure must be preserved.',
+    downstreamHint: 'Aris transmits critical relay shunt rating over the Concourse tube in Act V, and remotely dogs dome shutter pins in Act VII.',
+    effects: [
+      { type: 'RECORD_DECISION', target: 'aris_alliance_stance', value: 'collaborative_ally', rationale: 'Allied with Aris on bedrock seismology.' },
+      { type: 'MODIFY_RELATIONSHIP', target: 'aris', value: 30 },
+      { type: 'SET_FLAG', target: 'aris_allied', value: true },
+      { type: 'TRANSITION_SCENE', target: 'act_5_adaptive', value: true }
+    ]
+  },
+  {
+    id: 'decision_confront_aris',
+    label: 'Hold Aris to Strict Administrative Accountability',
+    description: 'Enforce Curator Sterling’s chain of command, treating Aris as an unverified obstructionist.',
+    rationaleWhy: 'Chain of command: Sterling’s celestial observations cannot be compromised by unverified tremors.',
+    downstreamHint: 'Aris ceases communications. You must bypass the Act V terminal lockouts and Act VII dome dogs alone.',
+    effects: [
+      { type: 'RECORD_DECISION', target: 'aris_alliance_stance', value: 'authoritative_investigator', rationale: 'Prioritized chain of command over Aris.' },
+      { type: 'MODIFY_RELATIONSHIP', target: 'aris', value: -30 },
+      { type: 'SET_FLAG', target: 'aris_allied', value: false },
+      { type: 'TRANSITION_SCENE', target: 'act_5_adaptive', value: true }
+    ]
+  }
+];
+
 export const ACT4_SCENE: Challenge = {
   id: 'act_4_navigation',
   order: 4,
@@ -783,7 +812,8 @@ export const ACT4_SCENE: Challenge = {
   completionCondition: [
     { type: 'FLAG_IS', target: 'act4_navigation_complete', expected: true }
   ],
-  completedMessage: 'Dialogue concluded. The route upward is clear.'
+  completedMessage: 'Dialogue concluded. Choose your stance with Aris to proceed.',
+  availableDecisions: ACT4_DECISIONS
 };
 
 // ============================================================================
