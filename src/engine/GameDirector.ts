@@ -4,15 +4,15 @@ import { TelemetryService } from './Telemetry';
 
 // ============================================================================
 // AI GAME DIRECTOR (Phase 3)
-// Generates understandable human insights (NOT debug jargon) for the player.
-// Analyzes reading behavior, error patterns, and prescribes pedagogical support.
+// Determines the learner's cognitive mental model and PRESCRIBES AN EXPERIENCE.
+// Influences gameplay archetype, ambiguity, and scene selection without
+// usurping authoritative deterministic runtime game state.
 // ============================================================================
 
 export class GameDirector {
   /**
    * Evaluates the learner profile and last action to generate an intelligent prescription.
-   * Returns player-friendly explanations designed to make the judge feel:
-   * "The world understands how I read."
+   * Directly chooses the GAMEPLAY ARCHETYPE and EXPERIENCE rather than merely tweaking text.
    */
   static diagnoseAndPrescribe(
     profile: LearnerProfile,
@@ -28,56 +28,69 @@ export class GameDirector {
       superficialGuesses: 0,
     };
 
-    // Determine primary area of needed calibration
     let targetSkill: ReadingSkill = 'causeEffect';
     let targetTopology: DirectorPrescription['targetTopology'] = 'TOP-2';
+    let experienceArchetype: DirectorPrescription['experienceArchetype'] = 'MECHANISM';
+    let ambiguityLevel: DirectorPrescription['ambiguityLevel'] = 'moderate';
+    let consequenceIntensity: DirectorPrescription['consequenceIntensity'] = 'moderate';
+    let theme: DirectorPrescription['theme'] = 'observatory_victorian';
     let headline = 'World Attuned';
-    let insight = 'The observatory systems respond to your reading clarity.';
+    let insight = 'The observatory systems respond according to your reading deductions.';
     let scaffolding: 0 | 1 | 2 = 0;
     let triggerTransfer = false;
+    let prescribedSceneId: string | undefined = undefined;
 
-    // 1. Immediate error intervention if triggered
-    if (lastError === 'temporal_reversal' || errors.temporalReversals >= 2) {
-      targetSkill = 'sequencing';
-      targetTopology = 'TOP-1';
-      scaffolding = 1;
-      headline = 'Attention to Sequence';
-      insight = 'Look for connecting words like "before" or "first" — mechanical actions require exact order.';
-    } else if (lastError === 'causal_inversion' || errors.causalInversions >= 2) {
+    // 1. Error Intervention & Experience Selection
+    if (lastError === 'causal_inversion' || errors.causalInversions >= 1) {
       targetSkill = 'causeEffect';
       targetTopology = 'TOP-2';
+      experienceArchetype = 'INVESTIGATION';
+      prescribedSceneId = 'act_5_adaptive';
       scaffolding = 1;
-      headline = 'Cause & Effect Calibration';
-      insight = 'Notice what powers what: downstream valves cannot operate until the primary loop is primed.';
-    } else if (lastError === 'ignored_negation' || errors.ignoredNegations >= 2) {
+      consequenceIntensity = 'moderate';
+      headline = 'Director Calibration: Causal Investigation';
+      insight = 'Detected difficulty with causal order. Switching experience to Multi-Document Incident Investigation.';
+    } else if (lastError === 'temporal_reversal' || errors.temporalReversals >= 1) {
+      targetSkill = 'sequencing';
+      targetTopology = 'TOP-1';
+      experienceArchetype = 'MECHANISM';
+      prescribedSceneId = 'act_5_adaptive';
+      scaffolding = 1;
+      consequenceIntensity = 'gentle';
+      headline = 'Director Calibration: Sequence Interlock';
+      insight = 'Observed sequence reversal. Prescribing strict chronological interlock with tactile commit.';
+    } else if (lastError === 'ignored_negation' || errors.ignoredNegations >= 1) {
       targetSkill = 'negativeConstraint';
       targetTopology = 'TOP-3';
+      experienceArchetype = 'RESOURCE_DECISION';
       scaffolding = 2;
-      headline = 'Safety Warning Active';
-      insight = 'The journal contains clear exclusion warnings: pay close attention to what must NOT be activated.';
-    } else if (lastError === 'superficial_guessing' || errors.superficialGuesses >= 3) {
+      consequenceIntensity = 'severe';
+      headline = 'Director Calibration: Exclusion Constraints';
+      insight = 'Safety warnings ignored. Routing into high-stakes mutual exclusion allocation.';
+    } else if (lastError === 'superficial_guessing' || errors.superficialGuesses >= 2) {
       targetSkill = 'literalRetrieval';
       targetTopology = 'TOP-5';
+      experienceArchetype = 'INVESTIGATION';
       scaffolding = 1;
-      headline = 'Pacing Calibration';
-      insight = 'Take a moment to inspect the text carefully. The answers are stated directly in the record.';
+      ambiguityLevel = 'low';
+      headline = 'Director Calibration: Evidence Retrieval';
+      insight = 'High click frequency detected without reading dwell. Presenting structured document cross-examination.';
     } else {
-      // 2. Proactive progression based on skill proficiency & evidence
-      // Check if learner has demonstrated strong causal reasoning -> Trigger Hero Transfer!
+      // Proactive progression: Check if learner has demonstrated causal reasoning -> Offer Hero Transfer!
       const causeScore = skills.causeEffect ?? 0.5;
       const causeConf = profile.skillConfidence?.causeEffect ?? 0.3;
 
-      if (causeScore >= 0.65 && causeConf >= 0.5 && currentChallengeId === 'challenge_3') {
+      if (causeScore >= 0.6 || causeConf >= 0.45) {
         triggerTransfer = true;
         targetSkill = 'causeEffect';
         targetTopology = 'TOP-2';
-        scaffolding = 0;
-        headline = 'Transfer Opportunity Unlocked';
-        insight = 'You have mastered the observatory boiler loop. Let us see if your understanding transfers to a new world.';
+        experienceArchetype = 'INVESTIGATION';
+        theme = 'triton_deep_sea';
+        headline = 'Transfer Opportunity Ready: Triton-IV';
+        insight = 'You have deduced causal loops in the Victorian Observatory. Prepare to transfer this skill to deep-sea reactor crisis triage.';
       } else {
-        // Standard adaptive status
         headline = 'Observatory Aligned';
-        insight = 'System calibration normal. Reading telemetry is guiding world state reactivity.';
+        insight = 'Reading telemetry is actively tailoring world state reactivity and narrative paths.';
       }
     }
 
@@ -86,6 +99,11 @@ export class GameDirector {
       recommendedDifficulty: profile.readingDifficulty,
       scaffoldingLevel: scaffolding,
       errorDiagnosed: lastError,
+      experienceArchetype,
+      ambiguityLevel,
+      consequenceIntensity,
+      theme,
+      prescribedSceneId,
       statusHeadline: headline,
       learnerInsight: insight,
       triggerTransfer,
@@ -95,6 +113,7 @@ export class GameDirector {
     TelemetryService.record('DIRECTOR_DIAGNOSIS_EMITTED', currentChallengeId, {
       headline,
       insight,
+      experienceArchetype,
       errorDiagnosed: lastError,
       triggerTransfer,
     });

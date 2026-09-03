@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLearnerStore } from '../engine/LearnerStore';
-import { Sparkles, Compass } from 'lucide-react';
+import { useGameStore } from '../engine/GameStore';
+import { Sparkles, Compass, Cpu, Sliders, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface DirectorHUDProps {
   onOpenTransfer?: () => void;
@@ -9,43 +10,160 @@ interface DirectorHUDProps {
 
 export const DirectorHUD: React.FC<DirectorHUDProps> = ({ onOpenTransfer, canTriggerTransfer }) => {
   const { profile } = useLearnerStore();
+  const {
+    simulateWeaknessProfile,
+    jumpToAct,
+    currentAct,
+    activeArchetype,
+    currentChallengeId
+  } = useGameStore();
+
+  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
   if (!profile) return null;
 
   const diagnosis = profile.lastDiagnosis || {
-    headline: 'The World Is Listening',
-    insight: 'The observatory mechanisms respond to how you read and interpret instructions.',
+    headline: 'World Attuned',
+    insight: 'The observatory mechanisms respond according to your reading deductions.',
     timestamp: 0
   };
 
   const isTransferReady = canTriggerTransfer || profile.lastDiagnosis?.headline.includes('Transfer');
 
   return (
-    <div className="w-full bg-slate-950/70 border-b border-amber-900/30 px-6 py-2 flex items-center justify-between gap-4 backdrop-blur-md z-10 select-none animate-in fade-in duration-300">
-      <div className="flex items-center gap-3 overflow-hidden">
-        <div className="flex items-center gap-1.5 shrink-0 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-mono uppercase tracking-wider font-semibold">
-          <Sparkles className="w-3 h-3 text-amber-400 animate-pulse" />
-          <span>Director</span>
+    <div className="w-full bg-stone-950/80 border-b border-stone-800 px-6 py-2 z-20 select-none animate-in fade-in duration-300 font-serif">
+      <div className="flex items-center justify-between gap-4">
+        {/* Natural Narrative Insight */}
+        <div className="flex items-center gap-3 overflow-hidden">
+          <div className="flex items-center gap-1.5 shrink-0 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-mono uppercase tracking-wider font-semibold">
+            <Sparkles className="w-3 h-3 text-amber-400 animate-pulse" />
+            <span>AI Director</span>
+          </div>
+
+          <div className="flex items-center gap-2 truncate">
+            <span className="text-xs font-bold text-amber-200/95 shrink-0">
+              {diagnosis.headline}:
+            </span>
+            <span className="text-xs text-stone-300 truncate font-sans">
+              {diagnosis.insight}
+            </span>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 truncate">
-          <span className="text-xs font-serif font-bold text-amber-200/90 shrink-0">
-            {diagnosis.headline}:
-          </span>
-          <span className="text-xs text-slate-300 truncate font-sans">
-            {diagnosis.insight}
-          </span>
+        {/* Action Controls */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Judge / Demo Inspector Toggle */}
+          <button
+            onClick={() => setIsInspectorOpen(!isInspectorOpen)}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all cursor-pointer ${
+              isInspectorOpen
+                ? 'bg-amber-500 text-stone-950 border-amber-400 font-bold'
+                : 'bg-stone-900 text-stone-400 hover:text-amber-200 border-stone-700 hover:border-amber-500'
+            }`}
+            title="Inspect AI Director reasoning and simulate learner weaknesses"
+          >
+            <Cpu className="w-3 h-3" />
+            <span className="hidden sm:inline">Demo Inspector</span>
+            {isInspectorOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+
+          {/* Hero Transfer Button */}
+          {isTransferReady && onOpenTransfer && (
+            <button
+              onClick={onOpenTransfer}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-[11px] font-mono font-bold tracking-wide shadow-lg shadow-cyan-900/30 transition-all cursor-pointer animate-pulse"
+            >
+              <Compass className="w-3.5 h-3.5" />
+              Triton Transfer
+            </button>
+          )}
         </div>
       </div>
 
-      {isTransferReady && onOpenTransfer && (
-        <button
-          onClick={onOpenTransfer}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-[11px] font-mono font-bold tracking-wide shadow-lg shadow-cyan-900/30 transition-all cursor-pointer animate-pulse"
-        >
-          <Compass className="w-3.5 h-3.5" />
-          Launch Triton Transfer
-        </button>
+      {/* Discreet Demo / Judge Inspector Drawer */}
+      {isInspectorOpen && (
+        <div className="mt-3 pt-3 border-t border-stone-800/80 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono animate-in slide-in-from-top-2 duration-200 bg-stone-900/90 p-4 rounded-xl border border-stone-700/80 shadow-2xl">
+          {/* Left Column: Diagnostics */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-amber-300 font-bold uppercase text-[11px]">
+              <Cpu className="w-3.5 h-3.5" />
+              <span>Director State & Pedagogical Diagnosis</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[10px] text-stone-300">
+              <div className="p-2 rounded bg-stone-950/70 border border-stone-800">
+                <span className="text-stone-500 block">Active Scene:</span>
+                <span className="text-amber-200 font-bold">{currentChallengeId}</span>
+              </div>
+              <div className="p-2 rounded bg-stone-950/70 border border-stone-800">
+                <span className="text-stone-500 block">Active Archetype:</span>
+                <span className="text-cyan-300 font-bold">{activeArchetype}</span>
+              </div>
+              <div className="p-2 rounded bg-stone-950/70 border border-stone-800">
+                <span className="text-stone-500 block">Causal Inversions:</span>
+                <span className="text-stone-200">{profile.errorPatterns.causalInversions}</span>
+              </div>
+              <div className="p-2 rounded bg-stone-950/70 border border-stone-800">
+                <span className="text-stone-500 block">Temporal Reversals:</span>
+                <span className="text-stone-200">{profile.errorPatterns.temporalReversals}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Demo Controls */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-cyan-300 font-bold uppercase text-[11px]">
+              <Sliders className="w-3.5 h-3.5" />
+              <span>Demo Controls: Simulate Learner Weakness</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => {
+                  simulateWeaknessProfile('causal_inversion');
+                  jumpToAct(5);
+                }}
+                className="px-2.5 py-1 rounded bg-stone-800 hover:bg-rose-950 text-stone-200 hover:text-rose-200 border border-stone-700 hover:border-rose-500 text-[10px] transition-colors cursor-pointer"
+                title="Simulates causal loop difficulty and adapts Act V to Incident Investigation"
+              >
+                ✦ Simulate Causal Inversion → Act V
+              </button>
+              <button
+                onClick={() => {
+                  simulateWeaknessProfile('temporal_reversal');
+                  jumpToAct(1);
+                }}
+                className="px-2.5 py-1 rounded bg-stone-800 hover:bg-amber-950 text-stone-200 hover:text-amber-200 border border-stone-700 hover:border-amber-500 text-[10px] transition-colors cursor-pointer"
+              >
+                ✦ Simulate Sequence Error
+              </button>
+              <button
+                onClick={() => {
+                  simulateWeaknessProfile('ignored_negation');
+                  jumpToAct(3);
+                }}
+                className="px-2.5 py-1 rounded bg-stone-800 hover:bg-cyan-950 text-stone-200 hover:text-cyan-200 border border-stone-700 hover:border-cyan-500 text-[10px] transition-colors cursor-pointer"
+              >
+                ✦ Simulate Negation Error → Act III
+              </button>
+            </div>
+
+            <div className="pt-1.5 flex items-center gap-1.5 text-[10px] text-stone-400">
+              <span>Jump Scene:</span>
+              {[1, 2, 3, 4, 5, 6, 7].map((actNum) => (
+                <button
+                  key={actNum}
+                  onClick={() => jumpToAct(actNum)}
+                  className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
+                    currentAct === actNum
+                      ? 'bg-amber-500 text-stone-950 font-bold border-amber-400'
+                      : 'bg-stone-800 text-stone-400 border-stone-700 hover:text-stone-200'
+                  }`}
+                >
+                  Act {actNum === 6 ? 'Transfer' : actNum}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

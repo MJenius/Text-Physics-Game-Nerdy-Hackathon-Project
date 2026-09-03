@@ -1,13 +1,30 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import type { WorldState, PlayerAction, EntityId, Challenge } from '../types/game';
-import { ALL_CHALLENGES, ALL_INITIAL_ENTITIES, ALL_INITIAL_INVENTORY, ALL_RULES } from '../content/allChallenges';
+import type {
+  WorldState,
+  PlayerAction,
+  EntityId,
+  Challenge,
+  InteractionArchetype,
+  NarrativeWorldState
+} from '../types/game';
+import {
+  CAMPAIGN_SCENES,
+  ALL_CAMPAIGN_RULES,
+  ACT1_ENTITIES,
+  ACT2_ARCHIVE_ENTITIES,
+  ACT2_HYDRAULIC_ENTITIES,
+  ACT3_ENTITIES,
+  ACT4_ENTITIES,
+  ACT5_ENTITIES,
+  ACT7_ENTITIES
+} from '../content/storyCampaign';
 import { ALL_SCHEMAS } from '../content/challengeSchemas';
 import { getFallbackPassage } from '../content/fallbackPassages';
 import { generatePassage, isAIAvailable, getCachedPassage } from './AIContentService';
 import { getDifficultyConstraints } from './DifficultyEngine';
 import { useLearnerStore } from './LearnerStore';
-import { SKILL_KEY_MAP, type GeneratedPassage } from '../types/learner';
+import { SKILL_KEY_MAP } from '../types/learner';
 import { RuleEvaluator } from './RuleEvaluator';
 import { TelemetryService } from './Telemetry';
 import { GameDirector } from './GameDirector';
@@ -26,13 +43,16 @@ interface GameStore extends WorldState {
   hasWonGame: boolean;
   lastAction: PlayerAction | null;
   isPassageGenerating: boolean;
-  // Phase 3 additions
   isEvidenceModalOpen: boolean;
+  isNotebookOpen: boolean;
   isTransferModeActive: boolean;
-  returnStageIndex: number;
+  returnSceneId: string;
 
+  // Actions
   selectInventoryItem: (id: EntityId | null) => void;
   executeAction: (action: PlayerAction) => void;
+  executeDecision: (decisionId: string) => void;
+  transitionToScene: (sceneId: string) => void;
   resetCurrentChallenge: () => void;
   recordReread: () => void;
   advanceToNextChallenge: () => void;
@@ -40,28 +60,88 @@ interface GameStore extends WorldState {
   loadAdaptedPassage: () => Promise<void>;
   openEvidenceModal: () => void;
   closeEvidenceModal: () => void;
+  openNotebook: () => void;
+  closeNotebook: () => void;
+  clearPhysicalConsequence: () => void;
   loadHeroTransferScenario: () => void;
   exitHeroTransferScenario: () => void;
+  simulateWeaknessProfile: (weakness: 'causal_inversion' | 'temporal_reversal' | 'ignored_negation') => void;
+  jumpToAct: (actNumber: number) => void;
 }
 
-const getInitialChallengeState = (index: number) => {
-  const challenge = ALL_CHALLENGES[index];
-  const entities = JSON.parse(JSON.stringify(ALL_INITIAL_ENTITIES[challenge.id] || {}));
-  const inventory = [...(ALL_INITIAL_INVENTORY[challenge.id] || [])];
+const INITIAL_NARRATIVE: NarrativeWorldState = {
+  discoveredFacts: [
+    'The Lost Observatory was evacuated during a mysterious celestial alignment.',
+    'Senior Curator Sterling and Chief Machinist Aris secured the facility with sequential interlocks.'
+  ],
+  visitedLocations: ['courtyard'],
+  obtainedItems: ['iron_key'],
+  poweredSystems: [],
+  triggeredEvents: [],
+  characterRelationships: {
+    aris: 50,
+    sterling: 50,
+    vale: 50
+  },
+  playerDecisions: {},
+  knownWorldRules: [
+    'Counterweighted portals require all locks disengaged before actuation.',
+    'Copper boiler jackets require flooded water coolant before combustion.',
+    'Dynamos have a strict 100 kW load ceiling on emergency reserve.'
+  ],
+  narrativeFlags: {},
+  currentObjective: {
+    id: 'obj_vestibule',
+    title: 'Unseal the Mountain Vestibule',
+    description: 'Examine Curator Sterling’s field journal to disengage both locks without damaging the antique pivots.',
+    hint: 'Disengage the upper brass latch by hand, and unlock the iron bolt with the gatekeeper key.'
+  },
+  availableLocations: ['courtyard']
+};
+
+const getSceneEntities = (sceneId: string): Record<string, any> => {
+  switch (sceneId) {
+    case 'act_1_vestibule':
+      return JSON.parse(JSON.stringify(ACT1_ENTITIES));
+    case 'act_2_archive':
+      return JSON.parse(JSON.stringify(ACT2_ARCHIVE_ENTITIES));
+    case 'act_2_hydraulics':
+      return JSON.parse(JSON.stringify(ACT2_HYDRAULIC_ENTITIES));
+    case 'act_3_junction':
+      return JSON.parse(JSON.stringify(ACT3_ENTITIES));
+    case 'act_4_navigation':
+      return JSON.parse(JSON.stringify(ACT4_ENTITIES));
+    case 'act_5_adaptive':
+      return JSON.parse(JSON.stringify(ACT5_ENTITIES));
+    case 'act_7_dome':
+      return JSON.parse(JSON.stringify(ACT7_ENTITIES));
+    default:
+      return JSON.parse(JSON.stringify(ACT1_ENTITIES));
+  }
+};
+
+const getInitialSceneState = (sceneId: string = 'act_1_vestibule') => {
+  const challenge = CAMPAIGN_SCENES[sceneId] || CAMPAIGN_SCENES['act_1_vestibule'];
+  const entities = getSceneEntities(challenge.id);
+  const inventory = ['iron_key'];
 
   return {
-    currentChallengeIndex: index,
+    currentChallengeIndex: challenge.order - 1,
     currentChallenge: challenge,
     currentLocationId: challenge.locationId,
     currentChallengeId: challenge.id,
+    activeArchetype: challenge.archetype || ('MECHANISM' as InteractionArchetype),
+    currentAct: challenge.act || 1,
     entities,
     inventory,
     flags: {},
+    narrative: JSON.parse(JSON.stringify(INITIAL_NARRATIVE)),
     isComplete: false,
     selectedInventoryItem: null,
+    physicalConsequence: undefined,
     lastFeedback: {
       type: 'info' as const,
-      message: `Entered ${challenge.title}. Consult the Field Journal on the left to plan your actions.`,
+      message: `Entered ${challenge.title}. Consult the Field Journal and documents to formulate your interpretation.`,
       timestamp: Date.now()
     }
   };
@@ -69,11 +149,10 @@ const getInitialChallengeState = (index: number) => {
 
 export const useGameStore = create<GameStore>()(
   immer((set, get) => {
-    // Initialize Telemetry on startup
     TelemetryService.init();
 
     return {
-      ...getInitialChallengeState(0),
+      ...getInitialSceneState('act_1_vestibule'),
       sessionStartTime: Date.now(),
       readingDwellStartTime: Date.now(),
       totalAttempts: 0,
@@ -84,8 +163,28 @@ export const useGameStore = create<GameStore>()(
       lastAction: null,
       isPassageGenerating: false,
       isEvidenceModalOpen: false,
+      isNotebookOpen: false,
       isTransferModeActive: false,
-      returnStageIndex: 0,
+      returnSceneId: 'act_1_vestibule',
+
+      openNotebook: () => {
+        set((state) => {
+          state.isNotebookOpen = true;
+          TelemetryService.record('NOTEBOOK_OPENED', state.currentChallengeId);
+        });
+      },
+
+      closeNotebook: () => {
+        set((state) => {
+          state.isNotebookOpen = false;
+        });
+      },
+
+      clearPhysicalConsequence: () => {
+        set((state) => {
+          state.physicalConsequence = undefined;
+        });
+      },
 
       openEvidenceModal: () => {
         set((state) => {
@@ -100,61 +199,284 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
+      selectInventoryItem: (id: EntityId | null) => {
+        set((state) => {
+          state.selectedInventoryItem = state.selectedInventoryItem === id ? null : id;
+        });
+      },
+
+      recordReread: () => {
+        set((state) => {
+          state.rereadCount += 1;
+        });
+        useLearnerStore.getState().updateSkill('literalRetrieval', 0.02);
+        TelemetryService.record('REREAD_RECORDED', get().currentChallengeId);
+      },
+
+      executeDecision: (decisionId: string) => {
+        const state = get();
+        const decision = state.currentChallenge.availableDecisions?.find((d) => d.id === decisionId);
+        if (!decision) return;
+
+        set((draft) => {
+          // Execute all effects associated with this meaningful player decision
+          for (const effect of decision.effects) {
+            if (effect.type === 'RECORD_DECISION') {
+              draft.narrative.playerDecisions[effect.target] = {
+                value: effect.value,
+                rationale: effect.rationale,
+                timestamp: Date.now(),
+                act: draft.currentAct
+              };
+            } else if (effect.type === 'POWER_SYSTEM') {
+              if (!draft.narrative.poweredSystems.includes(effect.target as any)) {
+                draft.narrative.poweredSystems.push(effect.target as any);
+              }
+            } else if (effect.type === 'DISCOVER_FACT') {
+              if (!draft.narrative.discoveredFacts.includes(effect.value as string)) {
+                draft.narrative.discoveredFacts.push(effect.value as string);
+              }
+            } else if (effect.type === 'SET_FLAG') {
+              draft.flags[effect.target] = effect.value;
+            }
+          }
+
+          draft.lastFeedback = {
+            type: 'info',
+            message: `Decision Committed: ${decision.label}. The world state updates accordingly.`,
+            timestamp: Date.now()
+          };
+
+          draft.physicalConsequence = {
+            visualEffect: 'gear_shudder',
+            description: decision.downstreamHint,
+            timestamp: Date.now()
+          };
+
+          TelemetryService.record('MEANINGFUL_DECISION_COMMITTED', draft.currentChallengeId, {
+            decisionId,
+            label: decision.label,
+            rationale: decision.rationaleWhy
+          });
+        });
+
+        // If this decision contains a scene transition effect, transition seamlessly!
+        const transitionEffect = decision.effects.find((e) => e.type === 'TRANSITION_SCENE');
+        if (transitionEffect && typeof transitionEffect.target === 'string') {
+          setTimeout(() => {
+            get().transitionToScene(transitionEffect.target);
+          }, 400);
+        }
+      },
+
+      transitionToScene: (sceneId: string) => {
+        const nextScene = CAMPAIGN_SCENES[sceneId];
+        if (!nextScene) return;
+
+        set((draft) => {
+          draft.currentChallengeId = nextScene.id;
+          draft.currentChallenge = nextScene;
+          draft.currentLocationId = nextScene.locationId;
+          draft.currentAct = nextScene.act || draft.currentAct;
+          draft.activeArchetype = nextScene.archetype || 'MECHANISM';
+          draft.isComplete = false;
+          draft.selectedInventoryItem = null;
+          draft.readingDwellStartTime = Date.now();
+
+          // Merge newly revealed scene entities while retaining current inventory items
+          const freshEntities = getSceneEntities(sceneId);
+          draft.entities = freshEntities;
+
+          // Provide essential narrative items if entering Act 5 or Act 7
+          if (sceneId === 'act_5_adaptive' && !draft.inventory.includes('replacement_shunt')) {
+            draft.inventory.push('replacement_shunt');
+            if (!draft.narrative.obtainedItems.includes('replacement_shunt')) {
+              draft.narrative.obtainedItems.push('replacement_shunt');
+            }
+          }
+          if (sceneId === 'act_7_dome' && !draft.inventory.includes('quartz_prism') && !freshEntities['quartz_receptacle']?.states?.hasPrism) {
+            draft.inventory.push('quartz_prism');
+            if (!draft.narrative.obtainedItems.includes('quartz_prism')) {
+              draft.narrative.obtainedItems.push('quartz_prism');
+            }
+          }
+
+          // Track visited locations
+          if (!draft.narrative.visitedLocations.includes(nextScene.locationId)) {
+            draft.narrative.visitedLocations.push(nextScene.locationId);
+          }
+
+          // Update objective
+          draft.narrative.currentObjective = {
+            id: `obj_${sceneId}`,
+            title: nextScene.title,
+            description: nextScene.passage.heading,
+            hint: nextScene.passage.keyClues?.[0]
+          };
+
+          draft.lastFeedback = {
+            type: 'info',
+            message: `Entered ${nextScene.title}. The consequences of your prior deductions linger in the machinery.`,
+            timestamp: Date.now()
+          };
+
+          draft.physicalConsequence = undefined;
+          TelemetryService.record('SCENE_TRANSITIONED', sceneId, { act: nextScene.act });
+        });
+
+        get().loadAdaptedPassage();
+      },
+
+      advanceToNextChallenge: () => {
+        const state = get();
+        const currentScene = state.currentChallenge;
+
+        // If scene has explicit branching decisions, player must select a decision!
+        if (currentScene.availableDecisions && currentScene.availableDecisions.length > 0) {
+          set((draft) => {
+            draft.lastFeedback = {
+              type: 'info',
+              message: 'Make your strategic route choice below to proceed.',
+              timestamp: Date.now()
+            };
+          });
+          return;
+        }
+
+        // Automatic story arc progression
+        let nextSceneId = 'act_7_dome';
+        if (currentScene.id === 'act_1_vestibule') {
+          nextSceneId = state.narrative.playerDecisions['act1_path_choice']?.value === 'hydraulics'
+            ? 'act_2_hydraulics'
+            : 'act_2_archive';
+        } else if (currentScene.id === 'act_2_archive' || currentScene.id === 'act_2_hydraulics') {
+          nextSceneId = 'act_3_junction';
+        } else if (currentScene.id === 'act_3_junction') {
+          nextSceneId = 'act_4_navigation';
+        } else if (currentScene.id === 'act_4_navigation') {
+          nextSceneId = 'act_5_adaptive';
+        } else if (currentScene.id === 'act_5_adaptive') {
+          nextSceneId = 'act_7_dome';
+        }
+
+        get().transitionToScene(nextSceneId);
+      },
+
+      resetCurrentChallenge: () => {
+        const state = get();
+        const sceneId = state.currentChallengeId;
+        const freshEntities = getSceneEntities(sceneId);
+
+        set((draft) => {
+          draft.entities = freshEntities;
+          draft.isComplete = false;
+          draft.selectedInventoryItem = null;
+          draft.physicalConsequence = undefined;
+          draft.lastFeedback = {
+            type: 'neutral',
+            message: `Mechanism reset to neutral configuration. Review the text carefully before acting.`,
+            timestamp: Date.now()
+          };
+          draft.readingDwellStartTime = Date.now();
+        });
+      },
+
+      restartFullGame: () => {
+        const fresh = getInitialSceneState('act_1_vestibule');
+        set((draft) => {
+          Object.assign(draft, fresh);
+          draft.sessionStartTime = Date.now();
+          draft.readingDwellStartTime = Date.now();
+          draft.totalAttempts = 0;
+          draft.failedAttempts = 0;
+          draft.rereadCount = 0;
+          draft.completedChallengesCount = 0;
+          draft.hasWonGame = false;
+          draft.lastAction = null;
+          draft.isTransferModeActive = false;
+          draft.isNotebookOpen = false;
+        });
+        get().loadAdaptedPassage();
+      },
+
       loadHeroTransferScenario: () => {
         set((state) => {
-          state.returnStageIndex = state.currentChallengeIndex; // Record where user came from
+          state.returnSceneId = state.currentChallengeId;
           state.isTransferModeActive = true;
           state.currentChallengeId = TRITON_TRANSFER_SCENARIO.id;
           state.currentChallenge = {
             id: TRITON_TRANSFER_SCENARIO.id,
             order: 99,
+            act: 6,
             title: TRITON_TRANSFER_SCENARIO.title,
-            locationId: 'laboratory',
+            locationId: 'submersible_delta',
+            archetype: 'INVESTIGATION',
             passage: TRITON_TRANSFER_SCENARIO.passage,
             targetReadingSkill: 'cause_effect',
             ruleIds: TRITON_TRANSFER_SCENARIO.rules.map((r) => r.id),
             completionCondition: TRITON_TRANSFER_SCENARIO.completionConditions,
-            completedMessage: 'Transfer Verified! Deep-Sea Geothermal Loop Mastered!',
+            completedMessage: 'Transfer Verified! Deep-Sea Geothermal Thermal Runaway Neutralized!'
           };
           state.entities = JSON.parse(JSON.stringify(TRITON_TRANSFER_SCENARIO.entities));
-          state.inventory = [...TRITON_TRANSFER_SCENARIO.initialInventory];
           state.flags = {};
           state.isComplete = false;
           state.selectedInventoryItem = null;
+          state.physicalConsequence = undefined;
           state.lastFeedback = {
             type: 'info',
-            message: 'Triton-IV Submersible Active: Review reactor manual to flood cooling coils before thermal ignition.',
-            timestamp: Date.now(),
+            message: 'Deep-Sea Crisis Active: Read Vance’s incident report to resolve vapor lock before firing pumps.',
+            timestamp: Date.now()
           };
           state.readingDwellStartTime = Date.now();
-          TelemetryService.record('TRANSFER_CHALLENGE_LOADED', TRITON_TRANSFER_SCENARIO.id);
+          TelemetryService.record('HERO_TRANSFER_SCENARIO_LOADED', TRITON_TRANSFER_SCENARIO.id);
         });
       },
 
       exitHeroTransferScenario: () => {
         const state = get();
-        const returnIndex = state.returnStageIndex ?? 0;
-        const fresh = getInitialChallengeState(returnIndex);
+        const returnId = state.returnSceneId || 'act_1_vestibule';
         set((draft) => {
           draft.isTransferModeActive = false;
-          draft.currentChallengeIndex = fresh.currentChallengeIndex;
-          draft.currentChallenge = fresh.currentChallenge;
-          draft.currentLocationId = fresh.currentLocationId;
-          draft.currentChallengeId = fresh.currentChallengeId;
-          draft.entities = fresh.entities;
-          draft.inventory = fresh.inventory;
-          draft.flags = fresh.flags;
-          draft.isComplete = false;
-          draft.selectedInventoryItem = null;
-          draft.lastFeedback = {
-            type: 'info',
-            message: `Returned to ${fresh.currentChallenge.title}. Resuming your observatory investigation.`,
-            timestamp: Date.now(),
-          };
-          draft.readingDwellStartTime = Date.now();
-          draft.lastAction = null;
         });
-        get().loadAdaptedPassage();
+        get().transitionToScene(returnId);
+      },
+
+      simulateWeaknessProfile: (weakness: 'causal_inversion' | 'temporal_reversal' | 'ignored_negation') => {
+        useLearnerStore.getState().recordErrorPattern(
+          weakness === 'causal_inversion'
+            ? 'causalInversions'
+            : weakness === 'temporal_reversal'
+            ? 'temporalReversals'
+            : 'ignoredNegations'
+        );
+        const profile = useLearnerStore.getState().profile;
+        if (profile) {
+          const prescription = GameDirector.diagnoseAndPrescribe(profile, get().currentChallengeId, weakness);
+          useLearnerStore.getState().setDirectorDiagnosis(prescription.statusHeadline, prescription.learnerInsight);
+        }
+      },
+
+      jumpToAct: (actNumber: number) => {
+        const targetSceneMap: Record<number, string> = {
+          1: 'act_1_vestibule',
+          2: 'act_2_archive',
+          3: 'act_3_junction',
+          4: 'act_4_navigation',
+          5: 'act_5_adaptive',
+          6: 'hero_triton_transfer',
+          7: 'act_7_dome'
+        };
+        const targetSceneId = targetSceneMap[actNumber];
+        if (targetSceneId === 'hero_triton_transfer') {
+          get().loadHeroTransferScenario();
+        } else if (targetSceneId) {
+          if (get().isTransferModeActive) {
+            set((draft) => {
+              draft.isTransferModeActive = false;
+            });
+          }
+          get().transitionToScene(targetSceneId);
+        }
       },
 
       loadAdaptedPassage: async () => {
@@ -166,7 +488,7 @@ export const useGameStore = create<GameStore>()(
         const schema = ALL_SCHEMAS[challenge.id];
         const isAIOn = learner.aiEnabled !== false;
 
-        // Instant deterministic fallback first
+        // Instant deterministic fallback
         const deterministicFallback = getFallbackPassage(
           challenge.id,
           learner.readingDifficulty,
@@ -174,7 +496,6 @@ export const useGameStore = create<GameStore>()(
           challenge.passage
         );
 
-        // If AI is disabled by user, immediately apply deterministic passage with 0 latency
         if (!isAIOn || !isAIAvailable() || !schema) {
           set((draft) => {
             draft.currentChallenge.adaptedPassage = deterministicFallback;
@@ -183,7 +504,6 @@ export const useGameStore = create<GameStore>()(
           return;
         }
 
-        // Check if we already have a cached AI passage for this combination (instant switch!)
         const cached = getCachedPassage(challenge.id, learner.audience, learner.readingDifficulty);
         if (cached) {
           set((draft) => {
@@ -193,137 +513,38 @@ export const useGameStore = create<GameStore>()(
           return;
         }
 
-        // Optimistic preview: immediately show verified fallback text while AI generates in background
         set((draft) => {
           draft.currentChallenge.adaptedPassage = deterministicFallback;
           draft.isPassageGenerating = true;
         });
 
         const constraints = getDifficultyConstraints(learner.audience, learner.readingDifficulty);
-        let adapted: GeneratedPassage | null = null;
-
-        try {
-          adapted = await generatePassage(schema, constraints, learner.audience, learner.readingDifficulty);
-        } catch (err) {
-          console.warn('[GameStore] AI passage generation failed, retaining fallback:', err);
-        }
-
-        // Only update if learner profile is still on the same audience and difficulty
-        const currentLearner = useLearnerStore.getState().profile;
-        if (
-          currentLearner &&
-          currentLearner.audience === learner.audience &&
-          currentLearner.readingDifficulty === learner.readingDifficulty &&
-          currentLearner.aiEnabled !== false
-        ) {
-          set((draft) => {
-            if (adapted) {
-              draft.currentChallenge.adaptedPassage = adapted;
+        generatePassage(schema, constraints, learner.audience, learner.readingDifficulty)
+          .then((generated) => {
+            if (generated) {
+              set((draft) => {
+                draft.currentChallenge.adaptedPassage = generated;
+                draft.isPassageGenerating = false;
+              });
+            } else {
+              set((draft) => {
+                draft.isPassageGenerating = false;
+              });
             }
-            draft.isPassageGenerating = false;
-          });
-        }
-      },
-
-      selectInventoryItem: (id: EntityId | null) => {
-        set((state) => {
-          state.selectedInventoryItem = state.selectedInventoryItem === id ? null : id;
-        });
-      },
-
-      recordReread: () => {
-        set((state) => {
-          state.rereadCount += 1;
-          TelemetryService.record('REREAD_TRIGGERED', state.currentChallengeId, {
-            totalRereads: state.rereadCount
-          });
-          state.lastFeedback = {
-            type: 'info',
-            message: 'Reviewing the Field Journal notes carefully...',
-            timestamp: Date.now()
-          };
-        });
-      },
-
-      resetCurrentChallenge: () => {
-        set((state) => {
-          const fresh = getInitialChallengeState(state.currentChallengeIndex);
-          state.entities = fresh.entities;
-          state.inventory = fresh.inventory;
-          state.flags = fresh.flags;
-          state.isComplete = false;
-          state.selectedInventoryItem = null;
-          state.lastFeedback = {
-            type: 'neutral',
-            message: 'Room mechanisms reset to initial state.',
-            timestamp: Date.now()
-          };
-          TelemetryService.record('CHALLENGE_RESET', state.currentChallengeId);
-        });
-      },
-
-      advanceToNextChallenge: () => {
-        set((state) => {
-          const nextIndex = state.currentChallengeIndex + 1;
-          if (nextIndex < ALL_CHALLENGES.length) {
-            const fresh = getInitialChallengeState(nextIndex);
-            state.currentChallengeIndex = fresh.currentChallengeIndex;
-            state.currentChallenge = fresh.currentChallenge;
-            state.currentLocationId = fresh.currentLocationId;
-            state.currentChallengeId = fresh.currentChallengeId;
-            state.entities = fresh.entities;
-            state.inventory = fresh.inventory;
-            state.flags = fresh.flags;
-            state.isComplete = false;
-            state.selectedInventoryItem = null;
-            state.lastFeedback = fresh.lastFeedback;
-            state.readingDwellStartTime = Date.now();
-            state.lastAction = null;
-            TelemetryService.record('PASSAGE_VIEW', fresh.currentChallengeId);
-          } else {
-            state.hasWonGame = true;
-            TelemetryService.record('WORLD_COMPLETE', state.currentChallengeId, {
-              totalDurationMs: Date.now() - state.sessionStartTime,
-              totalAttempts: state.totalAttempts,
-              failedAttempts: state.failedAttempts
+          })
+          .catch(() => {
+            set((draft) => {
+              draft.isPassageGenerating = false;
             });
-          }
-        });
-        // Load adapted passage for the new stage
-        get().loadAdaptedPassage();
-      },
-
-      restartFullGame: () => {
-        set((state) => {
-          const fresh = getInitialChallengeState(0);
-          state.currentChallengeIndex = 0;
-          state.currentChallenge = fresh.currentChallenge;
-          state.currentLocationId = fresh.currentLocationId;
-          state.currentChallengeId = fresh.currentChallengeId;
-          state.entities = fresh.entities;
-          state.inventory = fresh.inventory;
-          state.flags = fresh.flags;
-          state.isComplete = false;
-          state.isTransferModeActive = false;
-          state.selectedInventoryItem = null;
-          state.lastFeedback = fresh.lastFeedback;
-          state.sessionStartTime = Date.now();
-          state.readingDwellStartTime = Date.now();
-          state.totalAttempts = 0;
-          state.failedAttempts = 0;
-          state.rereadCount = 0;
-          state.completedChallengesCount = 0;
-          state.hasWonGame = false;
-          state.lastAction = null;
-        });
-        get().loadAdaptedPassage();
+          });
       },
 
       executeAction: (action: PlayerAction) => {
         const state = get();
         const currentChallenge = state.currentChallenge;
 
-        // Special handling for toggle/cycler entities (like Azimuth Dial or Power Switches)
+        // 1. Tactile Neutral Rotary / Toggle Handling (Zero-Solution-State Feedback)
+        // Azimuth Dial (Act VII): East -> South -> North -> East (Neutral text, NO green indicator!)
         if (action.type === 'ACTIVATE' && action.targetId === 'azimuth_dial') {
           const currentHeading = state.entities['azimuth_dial']?.states?.heading;
           const nextHeading = currentHeading === 'East' ? 'South' : currentHeading === 'South' ? 'North' : 'East';
@@ -335,19 +556,78 @@ export const useGameStore = create<GameStore>()(
               message: `You rotated the telescope azimuth bearing to face ${nextHeading}.`,
               timestamp: Date.now()
             };
+            draft.physicalConsequence = {
+              visualEffect: 'gear_shudder',
+              description: `Bearing rotated to ${nextHeading}.`,
+              timestamp: Date.now()
+            };
           });
           return;
         }
 
-        // Special handling for Power Switches toggle in Challenge 4
-        if (action.type === 'ACTIVATE' && (action.targetId === 'hydro_turbine_switch' || action.targetId === 'solar_bank_switch')) {
+        // Curator Safe Dial (Act II-A): Cycles 0 through 9 (Neutral dial, NO green indicator!)
+        if (action.type === 'ACTIVATE' && action.targetId === 'curator_safe') {
+          const currentDial = (state.entities['curator_safe']?.states?.dialPosition as number) || 0;
+          const nextDial = (currentDial + 1) % 10;
           set((draft) => {
             draft.totalAttempts += 1;
-            const currentEngaged = Boolean(draft.entities[action.targetId].states.isEngaged);
-            draft.entities[action.targetId].states.isEngaged = !currentEngaged;
+            draft.entities['curator_safe'].states.dialPosition = nextDial;
             draft.lastFeedback = {
               type: 'info',
-              message: `You toggled ${draft.entities[action.targetId].name} to ${!currentEngaged ? 'ON' : 'OFF'}.`,
+              message: `Tumbler dial adjusted to position [${nextDial}].`,
+              timestamp: Date.now()
+            };
+          });
+          return;
+        }
+
+        // Power Switches (Act III): Mutual exclusion check with physical breaker trip!
+        if (action.type === 'ACTIVATE' && (action.targetId === 'archive_power_switch' || action.targetId === 'hydraulic_power_switch')) {
+          set((draft) => {
+            draft.totalAttempts += 1;
+            const targetEntity = draft.entities[action.targetId];
+            const otherTargetId = action.targetId === 'archive_power_switch' ? 'hydraulic_power_switch' : 'archive_power_switch';
+            const otherEntity = draft.entities[otherTargetId];
+
+            const willBeEngaged = !Boolean(targetEntity.states.isEngaged);
+            targetEntity.states.isEngaged = willBeEngaged;
+
+            // Check if BOTH switches are engaged simultaneously (Exclusion breach: 80kW + 80kW = 160kW > 100kW!)
+            if (willBeEngaged && otherEntity?.states.isEngaged) {
+              // Trip the master breaker immediately with consequence!
+              targetEntity.states.isEngaged = false;
+              otherEntity.states.isEngaged = false;
+              draft.failedAttempts += 1;
+              draft.lastFeedback = {
+                type: 'failure',
+                message: 'BZZZZT-CLACK! Total load surged to 160 kW! The magnetic master breaker trips with a shower of copper sparks.',
+                timestamp: Date.now()
+              };
+              draft.physicalConsequence = {
+                visualEffect: 'circuit_spark',
+                description: 'Circuit breaker overload! Both breakers tripped.',
+                timestamp: Date.now(),
+                isError: true
+              };
+              useLearnerStore.getState().recordErrorPattern('ignoredNegations');
+              const profile = useLearnerStore.getState().profile;
+              if (profile) {
+                const prescription = GameDirector.diagnoseAndPrescribe(profile, draft.currentChallengeId, 'ignored_negation');
+                useLearnerStore.getState().setDirectorDiagnosis(prescription.statusHeadline, prescription.learnerInsight);
+              }
+              return;
+            }
+
+            // Normal toggle
+            draft.lastFeedback = {
+              type: 'info',
+              message: `${targetEntity.name} is now ${willBeEngaged ? 'ENGAGED' : 'DISENGAGED'}.`,
+              timestamp: Date.now()
+            };
+            draft.flags['act3_power_committed'] = willBeEngaged;
+            draft.physicalConsequence = {
+              visualEffect: 'gear_shudder',
+              description: `${targetEntity.name} ${willBeEngaged ? 'engaged' : 'disengaged'}.`,
               timestamp: Date.now()
             };
           });
@@ -360,10 +640,10 @@ export const useGameStore = create<GameStore>()(
           targetId: action.targetId
         });
 
-        // Query active candidate rules matching the action and target (including Hero Transfer rules)
+        // 2. Query Candidate Rules
         const allAvailableRules = state.isTransferModeActive
-          ? [...ALL_RULES, ...TRITON_TRANSFER_SCENARIO.rules]
-          : ALL_RULES;
+          ? [...TRITON_TRANSFER_SCENARIO.rules]
+          : ALL_CAMPAIGN_RULES;
 
         const relevantRules = allAvailableRules.filter((r) => {
           if (r.challengeId !== state.currentChallengeId) return false;
@@ -373,10 +653,6 @@ export const useGameStore = create<GameStore>()(
           return true;
         });
 
-        // Categorize rules:
-        // "Success" rules have a meaningful onSuccess (feedbackMessage or effects).
-        // "Failure detection" rules have empty onSuccess and describe a bad-state
-        // whose diagnostic message lives in onFailure.
         const successRules = relevantRules.filter(
           (r) => r.onSuccess.feedbackMessage || r.onSuccess.effects.length > 0
         );
@@ -384,12 +660,10 @@ export const useGameStore = create<GameStore>()(
           (r) => !r.onSuccess.feedbackMessage && r.onSuccess.effects.length === 0
         );
 
-        // 1. Try to find a success rule whose conditions all pass
         const passingSuccessRule = successRules.find((r) =>
           r.conditions.every((c) => RuleEvaluator.checkPredicate(c, state))
         );
 
-        // 2. If no success, find a failure-detection rule whose bad-state conditions match
         const matchingFailureRule = !passingSuccessRule
           ? failureDetectionRules.find((r) =>
               r.conditions.every((c) => RuleEvaluator.checkPredicate(c, state))
@@ -397,11 +671,10 @@ export const useGameStore = create<GameStore>()(
           : null;
 
         set((draft) => {
-
           draft.totalAttempts += 1;
 
           if (passingSuccessRule) {
-            // ── SUCCESS PATH ─────────────────────────────────────────────
+            // ── SUCCESS CONVOLUTION ─────────────────────────────────────
             const result = RuleEvaluator.evaluate(passingSuccessRule, state);
 
             for (const effect of result.effects) {
@@ -413,37 +686,58 @@ export const useGameStore = create<GameStore>()(
                 if (!draft.inventory.includes(effect.target)) {
                   draft.inventory.push(effect.target);
                 }
+                if (!draft.narrative.obtainedItems.includes(effect.target)) {
+                  draft.narrative.obtainedItems.push(effect.target);
+                }
               } else if (effect.type === 'REMOVE_INVENTORY') {
                 draft.inventory = draft.inventory.filter((id) => id !== effect.target);
               } else if (effect.type === 'SET_FLAG') {
                 draft.flags[effect.target] = effect.value;
+              } else if (effect.type === 'DISCOVER_FACT') {
+                if (!draft.narrative.discoveredFacts.includes(effect.value as string)) {
+                  draft.narrative.discoveredFacts.push(effect.value as string);
+                }
+              } else if (effect.type === 'RECORD_DECISION') {
+                draft.narrative.playerDecisions[effect.target] = {
+                  value: effect.value,
+                  rationale: effect.rationale,
+                  timestamp: Date.now(),
+                  act: draft.currentAct
+                };
               }
             }
 
             draft.lastFeedback = {
-              type: 'success',
+              type: 'info',
               message: result.feedback,
               timestamp: Date.now()
             };
 
-            draft.selectedInventoryItem = null;
+            draft.physicalConsequence = {
+              visualEffect: result.consequenceVisual || 'gear_shudder',
+              description: result.feedback,
+              timestamp: Date.now()
+            };
 
+            draft.selectedInventoryItem = null;
             TelemetryService.record('ACTION_EVALUATED', draft.currentChallengeId, { passed: true });
 
-            // Check for challenge completion
+            // Check completion
             const isComplete = RuleEvaluator.isChallengeComplete(currentChallenge.completionCondition, draft as WorldState);
             if (isComplete && !draft.isComplete) {
               draft.isComplete = true;
               draft.completedChallengesCount += 1;
-              draft.isEvidenceModalOpen = true; // Phase 3: trigger 'Show Your Proof'
 
-              TelemetryService.record('CHALLENGE_COMPLETE', draft.currentChallengeId, {
+              if (draft.currentChallengeId === 'act_7_dome') {
+                draft.hasWonGame = true;
+              }
+
+              TelemetryService.record('SCENE_COMPLETE', draft.currentChallengeId, {
                 durationMs: Date.now() - draft.readingDwellStartTime,
-                attempts: draft.totalAttempts,
-                failedAttempts: draft.failedAttempts
+                attempts: draft.totalAttempts
               });
 
-              // Phase 2 & 3: Record challenge outcome and update Director
+              // Update skills
               const skillKey = SKILL_KEY_MAP[currentChallenge.targetReadingSkill];
               if (skillKey) {
                 useLearnerStore.getState().recordChallengeResult({
@@ -456,7 +750,6 @@ export const useGameStore = create<GameStore>()(
                   firstTrySuccess: draft.failedAttempts === 0
                 });
 
-                // Update GameDirector diagnosis
                 const profile = useLearnerStore.getState().profile;
                 if (profile) {
                   const prescription = GameDirector.diagnoseAndPrescribe(profile, draft.currentChallengeId);
@@ -466,7 +759,7 @@ export const useGameStore = create<GameStore>()(
             }
 
           } else if (matchingFailureRule) {
-            // ── FAILURE DETECTION PATH ───────────────────────────────────
+            // ── FAILURE DETECTION PATH (CONSEQUENCE ENGINE) ──────────────
             draft.failedAttempts += 1;
             draft.lastFeedback = {
               type: 'failure',
@@ -474,20 +767,22 @@ export const useGameStore = create<GameStore>()(
               timestamp: Date.now()
             };
 
-            TelemetryService.record('PHYSICAL_CONSEQUENCE_TRIGGERED', draft.currentChallengeId, {
-              ruleId: matchingFailureRule.id,
-              feedback: matchingFailureRule.onFailure.feedbackMessage,
-            });
+            draft.physicalConsequence = {
+              visualEffect: matchingFailureRule.onFailure.consequenceVisual || 'steam_burst',
+              description: matchingFailureRule.onFailure.feedbackMessage,
+              timestamp: Date.now(),
+              isError: true
+            };
 
-            // Phase 3: Error Classification for Director
-            let errorType: 'temporal_reversal' | 'causal_inversion' | 'ignored_negation' | 'superficial_guessing' = 'causal_inversion';
-            if (draft.currentChallengeId === 'challenge_2') {
-              errorType = 'temporal_reversal';
-              useLearnerStore.getState().recordErrorPattern('temporalReversals');
-            } else if (draft.currentChallengeId === 'challenge_3') {
+            // Classify error pattern
+            let errorType: 'causal_inversion' | 'temporal_reversal' | 'ignored_negation' | 'superficial_guessing' = 'causal_inversion';
+            if (draft.currentChallengeId === 'act_2_hydraulics' || draft.currentChallengeId === 'hero_triton_transfer') {
               errorType = 'causal_inversion';
               useLearnerStore.getState().recordErrorPattern('causalInversions');
-            } else if (draft.currentChallengeId === 'challenge_4') {
+            } else if (draft.currentChallengeId === 'act_1_vestibule') {
+              errorType = 'temporal_reversal';
+              useLearnerStore.getState().recordErrorPattern('temporalReversals');
+            } else if (draft.currentChallengeId === 'act_3_junction') {
               errorType = 'ignored_negation';
               useLearnerStore.getState().recordErrorPattern('ignoredNegations');
             }
@@ -503,25 +798,13 @@ export const useGameStore = create<GameStore>()(
               useLearnerStore.getState().updateSkill(skillKey, -0.04);
             }
 
-            if (matchingFailureRule.onFailure.effects) {
-              for (const eff of matchingFailureRule.onFailure.effects) {
-                if (eff.type === 'SET_ENTITY_STATE' && eff.property && draft.entities[eff.target]) {
-                  draft.entities[eff.target].states[eff.property] = eff.value;
-                }
-              }
-            }
-
-            TelemetryService.record('ACTION_EVALUATED', draft.currentChallengeId, {
-              passed: false,
+            TelemetryService.record('PHYSICAL_CONSEQUENCE_TRIGGERED', draft.currentChallengeId, {
+              ruleId: matchingFailureRule.id,
               feedback: matchingFailureRule.onFailure.feedbackMessage
             });
 
           } else {
             // ── FALLBACK PATH ────────────────────────────────────────────
-            // No success rule passed and no failure-detection rule matched.
-            // Try evaluating success rules for their onFailure feedback
-            // (e.g. "already done" messages), then failure-detection rules
-            // (e.g. Challenge 1's __never_pass__ rules).
             let fallbackHandled = false;
 
             for (const r of successRules) {
@@ -533,72 +816,26 @@ export const useGameStore = create<GameStore>()(
                   message: result.feedback,
                   timestamp: Date.now()
                 };
-
-                const skillKey = SKILL_KEY_MAP[currentChallenge.targetReadingSkill];
-                if (skillKey) {
-                  useLearnerStore.getState().updateSkill(skillKey, -0.04);
-                }
-
-                if (r.onFailure.effects) {
-                  for (const eff of r.onFailure.effects) {
-                    if (eff.type === 'SET_ENTITY_STATE' && eff.property && draft.entities[eff.target]) {
-                      draft.entities[eff.target].states[eff.property] = eff.value;
-                    }
-                  }
-                }
-                TelemetryService.record('ACTION_EVALUATED', draft.currentChallengeId, { passed: false, feedback: result.feedback });
+                draft.physicalConsequence = {
+                  visualEffect: result.consequenceVisual || 'gear_shudder',
+                  description: result.feedback,
+                  timestamp: Date.now(),
+                  isError: true
+                };
                 fallbackHandled = true;
                 break;
               }
             }
 
             if (!fallbackHandled) {
-              for (const r of failureDetectionRules) {
-                const result = RuleEvaluator.evaluate(r, state);
-                if (!result.passed && result.feedback) {
-                  draft.failedAttempts += 1;
-                  draft.lastFeedback = {
-                    type: 'failure',
-                    message: result.feedback,
-                    timestamp: Date.now()
-                  };
-
-                  const skillKey = SKILL_KEY_MAP[currentChallenge.targetReadingSkill];
-                  if (skillKey) {
-                    useLearnerStore.getState().updateSkill(skillKey, -0.04);
-                  }
-
-                  if (r.onFailure.effects) {
-                    for (const eff of r.onFailure.effects) {
-                      if (eff.type === 'SET_ENTITY_STATE' && eff.property && draft.entities[eff.target]) {
-                        draft.entities[eff.target].states[eff.property] = eff.value;
-                      }
-                    }
-                  }
-                  TelemetryService.record('ACTION_EVALUATED', draft.currentChallengeId, { passed: false, feedback: result.feedback });
-                  fallbackHandled = true;
-                  break;
-                }
-              }
-            }
-
-            if (!fallbackHandled) {
-              // Generic messages for completely unmatched actions
               const target = draft.entities[action.targetId];
               const source = action.sourceId ? draft.entities[action.sourceId] : null;
               draft.failedAttempts += 1;
 
-              const skillKey = SKILL_KEY_MAP[currentChallenge.targetReadingSkill];
-              if (skillKey) {
-                useLearnerStore.getState().updateSkill(skillKey, -0.04);
-              }
-
-              TelemetryService.record('ACTION_EVALUATED', draft.currentChallengeId, { passed: false, reason: 'no_rule' });
-
               if (action.type === 'USE_ITEM_ON' && source && target) {
                 draft.lastFeedback = {
                   type: 'failure',
-                  message: `You tried using ${source.name} on ${target.name}, but the mechanism does not accept it.`,
+                  message: `You applied ${source.name} to ${target.name}, but the fitting does not accept it.`,
                   timestamp: Date.now()
                 };
               } else if (action.type === 'INSPECT' && target) {
@@ -610,7 +847,7 @@ export const useGameStore = create<GameStore>()(
               } else {
                 draft.lastFeedback = {
                   type: 'neutral',
-                  message: 'Nothing happens.',
+                  message: 'The mechanism does not respond to that action.',
                   timestamp: Date.now()
                 };
               }

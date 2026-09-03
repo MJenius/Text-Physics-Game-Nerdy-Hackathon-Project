@@ -1,6 +1,5 @@
 import type { GameRule, Predicate, WorldState, EvaluationResult } from '../types/game';
 
-
 export class RuleEvaluator {
   /**
    * Deterministically evaluates a rule against the current world state.
@@ -14,8 +13,9 @@ export class RuleEvaluator {
         return {
           passed: false,
           feedback: rule.onFailure.feedbackMessage,
-          effects: rule.onFailure.autoReset ? [{ type: 'RESET_CHALLENGE', target: '', value: true }] : [],
-          soundEffect: rule.onFailure.soundEffect
+          effects: rule.onFailure.effects || (rule.onFailure.autoReset ? [{ type: 'RESET_CHALLENGE', target: '', value: true }] : []),
+          soundEffect: rule.onFailure.soundEffect,
+          consequenceVisual: rule.onFailure.consequenceVisual
         };
       }
     }
@@ -24,7 +24,8 @@ export class RuleEvaluator {
       passed: true,
       feedback: rule.onSuccess.feedbackMessage,
       effects: rule.onSuccess.effects,
-      soundEffect: rule.onSuccess.soundEffect
+      soundEffect: rule.onSuccess.soundEffect,
+      consequenceVisual: rule.onSuccess.consequenceVisual
     };
   }
 
@@ -44,6 +45,16 @@ export class RuleEvaluator {
       case 'FLAG_IS': {
         return state.flags[p.target] === p.expected;
       }
+      case 'DECISION_EQUALS': {
+        const dec = state.narrative?.playerDecisions?.[p.target];
+        return dec ? dec.value === p.expected : false;
+      }
+      case 'FACT_KNOWN': {
+        return state.narrative?.discoveredFacts?.includes(p.target) || false;
+      }
+      case 'POWERED_HAS': {
+        return state.narrative?.poweredSystems?.includes(p.target as any) || false;
+      }
       default:
         return false;
     }
@@ -53,6 +64,6 @@ export class RuleEvaluator {
    * Verifies if all completion conditions for a challenge are satisfied.
    */
   static isChallengeComplete(conditions: Predicate[], state: WorldState): boolean {
-    return conditions.every(cond => this.checkPredicate(cond, state));
+    return conditions.every((cond) => this.checkPredicate(cond, state));
   }
 }
