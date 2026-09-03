@@ -39,6 +39,20 @@ export interface LearnerProfile {
   readingDifficulty: ReadingDifficulty;
   aiEnabled?: boolean; // Toggle for AI dynamic generation vs deterministic fallback
   skills: Record<ReadingSkill, number>; // 0.0–1.0
+  skillConfidence: Record<ReadingSkill, number>; // 0.0-1.0 confidence based on action + evidence + transfer
+  evidenceSuccessCount: Record<ReadingSkill, number>;
+  errorPatterns: {
+    temporalReversals: number;
+    missedPrerequisites: number;
+    ignoredNegations: number;
+    causalInversions: number;
+    superficialGuesses: number;
+  };
+  lastDiagnosis?: {
+    headline: string;
+    insight: string;
+    timestamp: number;
+  };
   sessionStats: {
     challengesCompleted: number;
     totalAttempts: number;

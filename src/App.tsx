@@ -10,10 +10,24 @@ import { ProgressView } from './components/ProgressView';
 import { useGameStore } from './engine/GameStore';
 import { useLearnerStore } from './engine/LearnerStore';
 import { initAIService } from './engine/AIContentService';
+import { DirectorHUD } from './components/DirectorHUD';
+import { EvidenceModal } from './components/EvidenceModal';
+import { DynamicTransferStageViewport } from './components/DynamicTransferStageViewport';
+import { ALL_SCHEMAS } from './content/challengeSchemas';
+import { TRITON_TRANSFER_SCENARIO } from './content/heroTransferScenario';
 import { Compass, RotateCcw, BarChart3, Settings } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const { resetCurrentChallenge, currentChallengeIndex, loadAdaptedPassage } = useGameStore();
+  const {
+    resetCurrentChallenge,
+    currentChallengeIndex,
+    currentChallenge,
+    loadAdaptedPassage,
+    isEvidenceModalOpen,
+    closeEvidenceModal,
+    isTransferModeActive,
+    loadHeroTransferScenario,
+  } = useGameStore();
   const { isOnboarded, profile } = useLearnerStore();
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -34,10 +48,18 @@ export const App: React.FC = () => {
 
   // Load adapted passage whenever onboarding status changes
   useEffect(() => {
-    if (isOnboarded) {
+    if (isOnboarded && !isTransferModeActive) {
       loadAdaptedPassage();
     }
-  }, [isOnboarded, loadAdaptedPassage]);
+  }, [isOnboarded, isTransferModeActive, loadAdaptedPassage]);
+
+  // Current passage paragraphs for evidence modal
+  const adapted = currentChallenge.adaptedPassage;
+  const currentParagraphs = adapted?.paragraphs || currentChallenge.passage.paragraphs;
+  const currentSchema = ALL_SCHEMAS[currentChallenge.id];
+  const expectedSnippet = isTransferModeActive
+    ? TRITON_TRANSFER_SCENARIO.evidenceSnippet
+    : currentSchema?.evidenceSentences[0]?.evidencePhrase || 'before';
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#070a11] text-slate-100 overflow-hidden select-none">
@@ -56,11 +78,13 @@ export const App: React.FC = () => {
                 Text Physics
               </h1>
               <span className="px-1.5 py-0.2 rounded bg-amber-500/10 border border-amber-500/20 text-[9px] text-amber-300 font-mono">
-                Phase 2
+                Phase 3
               </span>
             </div>
             <span className="text-[10px] text-slate-400 font-sans tracking-wide block -mt-0.5">
-              The Lost Observatory — Stage {currentChallengeIndex + 1} of 6
+              {isTransferModeActive
+                ? 'Hero Transfer Mode — Triton-IV Deep Sea Submersible'
+                : `The Lost Observatory — Stage ${currentChallengeIndex + 1} of 6`}
             </span>
           </div>
         </div>
@@ -99,6 +123,12 @@ export const App: React.FC = () => {
         </div>
       </header>
 
+      {/* AI Director Insight HUD */}
+      <DirectorHUD
+        onOpenTransfer={loadHeroTransferScenario}
+        canTriggerTransfer={Boolean(profile && (profile.skills.causeEffect >= 0.55 || currentChallengeIndex >= 2))}
+      />
+
       {/* Main Dual-Panel Stage Layout (50/50 Split) */}
       <main className="flex-1 flex overflow-hidden">
         {/* Left: Reading / Logbook Panel (50% on desktop) */}
@@ -114,8 +144,12 @@ export const App: React.FC = () => {
           </div>
 
           {/* Scrollable / Centered Stage Viewport */}
-          <div className="flex-1 overflow-y-auto flex items-center justify-center">
-            <StageViewport />
+          <div className="flex-1 overflow-y-auto flex items-center justify-center p-4">
+            {isTransferModeActive ? (
+              <DynamicTransferStageViewport />
+            ) : (
+              <StageViewport />
+            )}
           </div>
         </section>
       </main>
@@ -127,6 +161,19 @@ export const App: React.FC = () => {
 
       {/* Completion & Victory Modal */}
       <VictoryModal />
+
+      {/* Evidence Attribution Modal ("Show Your Proof") */}
+      <EvidenceModal
+        isOpen={isEvidenceModalOpen}
+        onClose={closeEvidenceModal}
+        targetSkill={currentChallenge.targetReadingSkill === 'cause_effect' ? 'causeEffect' : 'sequencing'}
+        challengeTitle={currentChallenge.title}
+        paragraphs={currentParagraphs}
+        expectedSentenceSnippet={expectedSnippet}
+        onVerified={(_wasCorrect) => {
+          // Closed and recorded
+        }}
+      />
 
       {/* Modals & Drawers */}
       <SettingsDrawer

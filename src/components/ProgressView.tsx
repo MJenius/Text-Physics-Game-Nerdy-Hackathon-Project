@@ -79,15 +79,23 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ isOpen, onClose }) =
                   ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.3)]'
                   : 'bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.3)]';
 
+              const confidence = profile.skillConfidence?.[skill] ?? 0.3;
+              const evidenceCount = profile.evidenceSuccessCount?.[skill] ?? 0;
+
               return (
                 <div key={skill} className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
                   <div className="flex items-center justify-between text-xs mb-1.5">
                     <span className="font-medium text-slate-200">
                       {SKILL_DISPLAY_NAMES[skill]}
                     </span>
-                    <span className="font-mono text-slate-400 text-[11px]">
-                      {score.toFixed(2)} ({percent}%)
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/50 px-1.5 py-0.2 rounded border border-cyan-800/40">
+                        {Math.round(confidence * 100)}% Confidence
+                      </span>
+                      <span className="font-mono text-slate-400 text-[11px]">
+                        {score.toFixed(2)} ({percent}%)
+                      </span>
+                    </div>
                   </div>
                   <div className="w-full h-2 rounded-full bg-slate-800/80 overflow-hidden">
                     <div
@@ -95,6 +103,11 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ isOpen, onClose }) =
                       style={{ width: `${percent}%` }}
                     />
                   </div>
+                  {evidenceCount > 0 && (
+                    <div className="text-[9px] font-mono text-slate-500 mt-1 flex items-center gap-1">
+                      <span>✓ Verified with {evidenceCount} textual proof point{evidenceCount > 1 ? 's' : ''}</span>
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -10,6 +10,8 @@ import { useLearnerStore } from './LearnerStore';
 import { SKILL_KEY_MAP, type GeneratedPassage } from '../types/learner';
 import { RuleEvaluator } from './RuleEvaluator';
 import { TelemetryService } from './Telemetry';
+import { GameDirector } from './GameDirector';
+import { TRITON_TRANSFER_SCENARIO } from '../content/heroTransferScenario';
 
 interface GameStore extends WorldState {
   currentChallengeIndex: number;
@@ -24,6 +26,9 @@ interface GameStore extends WorldState {
   hasWonGame: boolean;
   lastAction: PlayerAction | null;
   isPassageGenerating: boolean;
+  // Phase 3 additions
+  isEvidenceModalOpen: boolean;
+  isTransferModeActive: boolean;
 
   selectInventoryItem: (id: EntityId | null) => void;
   executeAction: (action: PlayerAction) => void;
@@ -32,6 +37,9 @@ interface GameStore extends WorldState {
   advanceToNextChallenge: () => void;
   restartFullGame: () => void;
   loadAdaptedPassage: () => Promise<void>;
+  openEvidenceModal: () => void;
+  closeEvidenceModal: () => void;
+  loadHeroTransferScenario: () => void;
 }
 
 const getInitialChallengeState = (index: number) => {
@@ -73,6 +81,51 @@ export const useGameStore = create<GameStore>()(
       hasWonGame: false,
       lastAction: null,
       isPassageGenerating: false,
+      isEvidenceModalOpen: false,
+      isTransferModeActive: false,
+
+      openEvidenceModal: () => {
+        set((state) => {
+          state.isEvidenceModalOpen = true;
+          TelemetryService.record('EVIDENCE_REQUESTED', state.currentChallengeId);
+        });
+      },
+
+      closeEvidenceModal: () => {
+        set((state) => {
+          state.isEvidenceModalOpen = false;
+        });
+      },
+
+      loadHeroTransferScenario: () => {
+        set((state) => {
+          state.isTransferModeActive = true;
+          state.currentChallengeId = TRITON_TRANSFER_SCENARIO.id;
+          state.currentChallenge = {
+            id: TRITON_TRANSFER_SCENARIO.id,
+            order: 99,
+            title: TRITON_TRANSFER_SCENARIO.title,
+            locationId: 'laboratory',
+            passage: TRITON_TRANSFER_SCENARIO.passage,
+            targetReadingSkill: 'cause_effect',
+            ruleIds: TRITON_TRANSFER_SCENARIO.rules.map((r) => r.id),
+            completionCondition: TRITON_TRANSFER_SCENARIO.completionConditions,
+            completedMessage: 'Transfer Verified! Deep-Sea Geothermal Loop Mastered!',
+          };
+          state.entities = JSON.parse(JSON.stringify(TRITON_TRANSFER_SCENARIO.entities));
+          state.inventory = [...TRITON_TRANSFER_SCENARIO.initialInventory];
+          state.flags = {};
+          state.isComplete = false;
+          state.selectedInventoryItem = null;
+          state.lastFeedback = {
+            type: 'info',
+            message: 'Triton-IV Submersible Active: Review reactor manual to flood cooling coils before thermal ignition.',
+            timestamp: Date.now(),
+          };
+          state.readingDwellStartTime = Date.now();
+          TelemetryService.record('TRANSFER_CHALLENGE_LOADED', TRITON_TRANSFER_SCENARIO.id);
+        });
+      },
 
       loadAdaptedPassage: async () => {
         const state = get();
@@ -347,13 +400,15 @@ export const useGameStore = create<GameStore>()(
             if (isComplete && !draft.isComplete) {
               draft.isComplete = true;
               draft.completedChallengesCount += 1;
+              draft.isEvidenceModalOpen = true; // Phase 3: trigger 'Show Your Proof'
+
               TelemetryService.record('CHALLENGE_COMPLETE', draft.currentChallengeId, {
                 durationMs: Date.now() - draft.readingDwellStartTime,
                 attempts: draft.totalAttempts,
                 failedAttempts: draft.failedAttempts
               });
 
-              // Phase 2: Record challenge outcome in LearnerStore
+              // Phase 2 & 3: Record challenge outcome and update Director
               const skillKey = SKILL_KEY_MAP[currentChallenge.targetReadingSkill];
               if (skillKey) {
                 useLearnerStore.getState().recordChallengeResult({
@@ -365,13 +420,18 @@ export const useGameStore = create<GameStore>()(
                   completionTimeMs: Date.now() - draft.readingDwellStartTime,
                   firstTrySuccess: draft.failedAttempts === 0
                 });
+
+                // Update GameDirector diagnosis
+                const profile = useLearnerStore.getState().profile;
+                if (profile) {
+                  const prescription = GameDirector.diagnoseAndPrescribe(profile, draft.currentChallengeId);
+                  useLearnerStore.getState().setDirectorDiagnosis(prescription.statusHeadline, prescription.learnerInsight);
+                }
               }
             }
 
           } else if (matchingFailureRule) {
             // ── FAILURE DETECTION PATH ───────────────────────────────────
-            // A failure-detection rule's conditions describe the bad state.
-            // When they match, use its onFailure message and side effects.
             draft.failedAttempts += 1;
             draft.lastFeedback = {
               type: 'failure',
@@ -379,7 +439,30 @@ export const useGameStore = create<GameStore>()(
               timestamp: Date.now()
             };
 
-            // Phase 2: Skill tracking on failure
+            TelemetryService.record('PHYSICAL_CONSEQUENCE_TRIGGERED', draft.currentChallengeId, {
+              ruleId: matchingFailureRule.id,
+              feedback: matchingFailureRule.onFailure.feedbackMessage,
+            });
+
+            // Phase 3: Error Classification for Director
+            let errorType: 'temporal_reversal' | 'causal_inversion' | 'ignored_negation' | 'superficial_guessing' = 'causal_inversion';
+            if (draft.currentChallengeId === 'challenge_2') {
+              errorType = 'temporal_reversal';
+              useLearnerStore.getState().recordErrorPattern('temporalReversals');
+            } else if (draft.currentChallengeId === 'challenge_3') {
+              errorType = 'causal_inversion';
+              useLearnerStore.getState().recordErrorPattern('causalInversions');
+            } else if (draft.currentChallengeId === 'challenge_4') {
+              errorType = 'ignored_negation';
+              useLearnerStore.getState().recordErrorPattern('ignoredNegations');
+            }
+
+            const profile = useLearnerStore.getState().profile;
+            if (profile) {
+              const prescription = GameDirector.diagnoseAndPrescribe(profile, draft.currentChallengeId, errorType);
+              useLearnerStore.getState().setDirectorDiagnosis(prescription.statusHeadline, prescription.learnerInsight);
+            }
+
             const skillKey = SKILL_KEY_MAP[currentChallenge.targetReadingSkill];
             if (skillKey) {
               useLearnerStore.getState().updateSkill(skillKey, -0.04);

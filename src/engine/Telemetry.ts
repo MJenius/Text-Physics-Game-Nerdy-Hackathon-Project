@@ -16,7 +16,13 @@ export type TelemetryEventType =
   | 'HINT_SHOWN'
   | 'HINT_USED'
   | 'SKILL_UPDATED'
-  | 'DIFFICULTY_ADJUSTED';
+  | 'DIFFICULTY_ADJUSTED'
+  // Phase 3 events
+  | 'PHYSICAL_CONSEQUENCE_TRIGGERED'
+  | 'EVIDENCE_REQUESTED'
+  | 'EVIDENCE_EVALUATED'
+  | 'DIRECTOR_DIAGNOSIS_EMITTED'
+  | 'TRANSFER_CHALLENGE_LOADED';
 
 export interface TelemetryEvent {
   type: TelemetryEventType;

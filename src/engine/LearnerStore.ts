@@ -38,6 +38,24 @@ function saveToStorage(profile: LearnerProfile | null) {
   }
 }
 
+export const DEFAULT_CONFIDENCE: Record<ReadingSkill, number> = {
+  literalRetrieval: 0.3,
+  sequencing: 0.3,
+  causeEffect: 0.3,
+  negativeConstraint: 0.3,
+  multiCondition: 0.3,
+  synthesis: 0.3,
+};
+
+export const DEFAULT_EVIDENCE_COUNTS: Record<ReadingSkill, number> = {
+  literalRetrieval: 0,
+  sequencing: 0,
+  causeEffect: 0,
+  negativeConstraint: 0,
+  multiCondition: 0,
+  synthesis: 0,
+};
+
 interface LearnerStore {
   profile: LearnerProfile | null;
   isOnboarded: boolean;
@@ -50,6 +68,9 @@ interface LearnerStore {
   setDifficulty: (difficulty: ReadingDifficulty) => void;
   setAiEnabled: (enabled: boolean) => void;
   updateSkill: (skill: ReadingSkill, delta: number) => void;
+  recordErrorPattern: (errorType: 'temporalReversals' | 'missedPrerequisites' | 'ignoredNegations' | 'causalInversions' | 'superficialGuesses') => void;
+  recordEvidenceAttribution: (skill: ReadingSkill, passed: boolean) => void;
+  setDirectorDiagnosis: (headline: string, insight: string) => void;
   recordChallengeResult: (data: {
     challengeId: string;
     skill: ReadingSkill;
@@ -82,6 +103,15 @@ export const useLearnerStore = create<LearnerStore>()(
             readingDifficulty: difficulty,
             aiEnabled: true,
             skills: { ...DEFAULT_SKILLS },
+            skillConfidence: { ...DEFAULT_CONFIDENCE },
+            evidenceSuccessCount: { ...DEFAULT_EVIDENCE_COUNTS },
+            errorPatterns: {
+              temporalReversals: 0,
+              missedPrerequisites: 0,
+              ignoredNegations: 0,
+              causalInversions: 0,
+              superficialGuesses: 0,
+            },
             sessionStats: {
               challengesCompleted: 0,
               totalAttempts: 0,
@@ -145,6 +175,68 @@ export const useLearnerStore = create<LearnerStore>()(
               delta,
               newValue: state.profile.skills[skill],
             });
+          }
+        });
+      },
+
+      recordErrorPattern: (errorType) => {
+        set((state) => {
+          if (state.profile) {
+            if (!state.profile.errorPatterns) {
+              state.profile.errorPatterns = {
+                temporalReversals: 0,
+                missedPrerequisites: 0,
+                ignoredNegations: 0,
+                causalInversions: 0,
+                superficialGuesses: 0,
+              };
+            }
+            state.profile.errorPatterns[errorType] += 1;
+            state.profile.updatedAt = Date.now();
+            saveToStorage(state.profile);
+          }
+        });
+      },
+
+      recordEvidenceAttribution: (skill: ReadingSkill, passed: boolean) => {
+        set((state) => {
+          if (state.profile) {
+            if (!state.profile.skillConfidence) {
+              state.profile.skillConfidence = { ...DEFAULT_CONFIDENCE };
+            }
+            if (!state.profile.evidenceSuccessCount) {
+              state.profile.evidenceSuccessCount = { ...DEFAULT_EVIDENCE_COUNTS };
+            }
+
+            if (passed) {
+              state.profile.evidenceSuccessCount[skill] += 1;
+              const count = state.profile.evidenceSuccessCount[skill];
+              // Triangulated confidence increases with verified evidence
+              state.profile.skillConfidence[skill] = Math.min(1, 0.3 + (count * 0.15));
+              // Also reward mastery
+              const currSkill = state.profile.skills[skill];
+              state.profile.skills[skill] = Math.min(1, currSkill + 0.08);
+            } else {
+              // Guessing or misaligned evidence
+              const currConf = state.profile.skillConfidence[skill];
+              state.profile.skillConfidence[skill] = Math.max(0.15, currConf - 0.1);
+            }
+            state.profile.updatedAt = Date.now();
+            saveToStorage(state.profile);
+          }
+        });
+      },
+
+      setDirectorDiagnosis: (headline: string, insight: string) => {
+        set((state) => {
+          if (state.profile) {
+            state.profile.lastDiagnosis = {
+              headline,
+              insight,
+              timestamp: Date.now(),
+            };
+            state.profile.updatedAt = Date.now();
+            saveToStorage(state.profile);
           }
         });
       },
