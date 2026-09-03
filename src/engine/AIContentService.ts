@@ -21,7 +21,7 @@ import { TelemetryService } from './Telemetry';
 
 let apiKey: string | null = null;
 let genAI: import('@google/genai').GoogleGenAI | null = null;
-const MODEL = 'gemini-2.0-flash';
+const MODEL = 'gemini-3.6-flash';
 
 /** Minimum interval between API calls (ms) */
 const RATE_LIMIT_MS = 1500;
@@ -31,16 +31,17 @@ let lastCallTime = 0;
  * Initialize the service by reading the API key from env.
  * Call once at app startup.
  */
-export function initAIService(): void {
+export async function initAIService(): Promise<void> {
   apiKey = import.meta.env.VITE_GEMINI_API_KEY || null;
   if (apiKey) {
-    import('@google/genai').then(({ GoogleGenAI }) => {
+    try {
+      const { GoogleGenAI } = await import('@google/genai');
       genAI = new GoogleGenAI({ apiKey: apiKey! });
-      console.log('[AIContentService] Gemini initialized');
-    }).catch((err) => {
+      console.log('[AIContentService] Gemini initialized with model', MODEL);
+    } catch (err) {
       console.warn('[AIContentService] Failed to load Gemini SDK:', err);
       genAI = null;
-    });
+    }
   } else {
     console.log('[AIContentService] No API key found — AI features disabled, using fallback passages');
   }

@@ -19,12 +19,20 @@ export const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isProgressOpen, setIsProgressOpen] = useState(false);
 
-  // Initialize AI service once on mount
+  // Initialize AI service once on mount and then load adapted passage if onboarded
   useEffect(() => {
-    initAIService();
+    let mounted = true;
+    initAIService().then(() => {
+      if (mounted && useLearnerStore.getState().isOnboarded) {
+        useGameStore.getState().loadAdaptedPassage();
+      }
+    });
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  // Load adapted passage whenever onboarding is completed or app loads with existing profile
+  // Load adapted passage whenever onboarding status changes
   useEffect(() => {
     if (isOnboarded) {
       loadAdaptedPassage();
