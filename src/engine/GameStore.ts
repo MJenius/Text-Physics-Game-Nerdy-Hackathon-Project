@@ -29,6 +29,7 @@ interface GameStore extends WorldState {
   // Phase 3 additions
   isEvidenceModalOpen: boolean;
   isTransferModeActive: boolean;
+  returnStageIndex: number;
 
   selectInventoryItem: (id: EntityId | null) => void;
   executeAction: (action: PlayerAction) => void;
@@ -40,6 +41,7 @@ interface GameStore extends WorldState {
   openEvidenceModal: () => void;
   closeEvidenceModal: () => void;
   loadHeroTransferScenario: () => void;
+  exitHeroTransferScenario: () => void;
 }
 
 const getInitialChallengeState = (index: number) => {
@@ -83,6 +85,7 @@ export const useGameStore = create<GameStore>()(
       isPassageGenerating: false,
       isEvidenceModalOpen: false,
       isTransferModeActive: false,
+      returnStageIndex: 0,
 
       openEvidenceModal: () => {
         set((state) => {
@@ -99,6 +102,7 @@ export const useGameStore = create<GameStore>()(
 
       loadHeroTransferScenario: () => {
         set((state) => {
+          state.returnStageIndex = state.currentChallengeIndex; // Record where user came from
           state.isTransferModeActive = true;
           state.currentChallengeId = TRITON_TRANSFER_SCENARIO.id;
           state.currentChallenge = {
@@ -125,6 +129,32 @@ export const useGameStore = create<GameStore>()(
           state.readingDwellStartTime = Date.now();
           TelemetryService.record('TRANSFER_CHALLENGE_LOADED', TRITON_TRANSFER_SCENARIO.id);
         });
+      },
+
+      exitHeroTransferScenario: () => {
+        const state = get();
+        const returnIndex = state.returnStageIndex ?? 0;
+        const fresh = getInitialChallengeState(returnIndex);
+        set((draft) => {
+          draft.isTransferModeActive = false;
+          draft.currentChallengeIndex = fresh.currentChallengeIndex;
+          draft.currentChallenge = fresh.currentChallenge;
+          draft.currentLocationId = fresh.currentLocationId;
+          draft.currentChallengeId = fresh.currentChallengeId;
+          draft.entities = fresh.entities;
+          draft.inventory = fresh.inventory;
+          draft.flags = fresh.flags;
+          draft.isComplete = false;
+          draft.selectedInventoryItem = null;
+          draft.lastFeedback = {
+            type: 'info',
+            message: `Returned to ${fresh.currentChallenge.title}. Resuming your observatory investigation.`,
+            timestamp: Date.now(),
+          };
+          draft.readingDwellStartTime = Date.now();
+          draft.lastAction = null;
+        });
+        get().loadAdaptedPassage();
       },
 
       loadAdaptedPassage: async () => {
@@ -274,6 +304,7 @@ export const useGameStore = create<GameStore>()(
           state.inventory = fresh.inventory;
           state.flags = fresh.flags;
           state.isComplete = false;
+          state.isTransferModeActive = false;
           state.selectedInventoryItem = null;
           state.lastFeedback = fresh.lastFeedback;
           state.sessionStartTime = Date.now();
@@ -329,8 +360,12 @@ export const useGameStore = create<GameStore>()(
           targetId: action.targetId
         });
 
-        // Query active candidate rules matching the action and target
-        const relevantRules = ALL_RULES.filter((r) => {
+        // Query active candidate rules matching the action and target (including Hero Transfer rules)
+        const allAvailableRules = state.isTransferModeActive
+          ? [...ALL_RULES, ...TRITON_TRANSFER_SCENARIO.rules]
+          : ALL_RULES;
+
+        const relevantRules = allAvailableRules.filter((r) => {
           if (r.challengeId !== state.currentChallengeId) return false;
           if (r.action !== action.type) return false;
           if (r.targetId !== action.targetId) return false;

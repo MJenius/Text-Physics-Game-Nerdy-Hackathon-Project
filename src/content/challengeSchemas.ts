@@ -251,6 +251,36 @@ export const challenge6Schema: ChallengeSchema = {
   ],
 };
 
+export const heroTritonSchema: ChallengeSchema = {
+  challengeId: 'hero_triton_transfer',
+  skill: 'causeEffect',
+  requiredEntities: [
+    'seawater intake valve',
+    'thermal reactor coil',
+    'coolant loop',
+  ],
+  requiredRelationships: [
+    'The primary seawater intake valve MUST be fully opened before thermal ignition',
+    'Engaging the thermal reactor while dry triggers emergency acoustic blow-off',
+  ],
+  solutionSteps: [
+    'Open the seawater intake valve',
+    'Ignite the thermal reactor coil',
+  ],
+  evidenceSentences: [
+    {
+      failureCondition: 'reactor_fail_dry',
+      paragraphIndex: 1,
+      evidencePhrase: 'primary seawater intake valve MUST be fully opened',
+      hintLevels: [
+        'Look at what the submersible manual says must be opened before igniting the reactor.',
+        'Seawater must flood the titanium coils before the thermal core is engaged.',
+        'Open the Seawater Intake Valve first, then ignite the Thermal Reactor.',
+      ],
+    },
+  ],
+};
+
 /** All schemas keyed by challenge ID */
 export const ALL_SCHEMAS: Record<string, ChallengeSchema> = {
   challenge_1: challenge1Schema,
@@ -259,4 +289,5 @@ export const ALL_SCHEMAS: Record<string, ChallengeSchema> = {
   challenge_4: challenge4Schema,
   challenge_5: challenge5Schema,
   challenge_6: challenge6Schema,
+  hero_triton_transfer: heroTritonSchema,
 };

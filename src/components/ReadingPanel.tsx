@@ -16,22 +16,33 @@ export const ReadingPanel: React.FC = () => {
     lastAction,
     failedAttempts,
     isPassageGenerating,
+    isTransferModeActive,
   } = useGameStore();
 
   const { profile } = useLearnerStore();
 
   // Prefer adapted passage if available, else original passage
   const adapted = currentChallenge.adaptedPassage;
-  const passageTitle = adapted?.title || currentChallenge.passage.heading;
-  const passageSource = adapted?.source || currentChallenge.passage.source;
-  const paragraphs = adapted?.paragraphs || currentChallenge.passage.paragraphs;
-  const targetVocab = adapted?.targetVocabulary || currentChallenge.passage.keyClues || [];
+  const passageTitle = isTransferModeActive
+    ? currentChallenge.passage.heading
+    : (adapted?.title || currentChallenge.passage.heading);
+  const passageSource = isTransferModeActive
+    ? currentChallenge.passage.source
+    : (adapted?.source || currentChallenge.passage.source);
+  const paragraphs = isTransferModeActive
+    ? currentChallenge.passage.paragraphs
+    : (adapted?.paragraphs || currentChallenge.passage.paragraphs);
+  const targetVocab = isTransferModeActive
+    ? (currentChallenge.passage.keyClues || [])
+    : (adapted?.targetVocabulary || currentChallenge.passage.keyClues || []);
 
   const isFeedbackFailure = lastFeedback.type === 'failure';
   const skillKey = SKILL_KEY_MAP[currentChallenge.targetReadingSkill] || 'literalRetrieval';
-  const personalizedNudge = profile
-    ? getPersonalizedRereadingPrompt(skillKey, profile.audience)
-    : 'Notice the key rule in the text: consult the highlighted conditions before repeating your interaction.';
+  const personalizedNudge = isTransferModeActive
+    ? 'Notice the technical safety manual: flood the cooling coils before thermal ignition.'
+    : (profile
+        ? getPersonalizedRereadingPrompt(skillKey, profile.audience)
+        : 'Notice the key rule in the text: consult the highlighted conditions before repeating your interaction.');
 
   const skillLabels: Record<string, string> = {
     literal_retrieval: 'Literal Retrieval',
@@ -49,7 +60,7 @@ export const ReadingPanel: React.FC = () => {
         <div className="flex items-center gap-2 text-amber-400">
           <BookOpen className="w-5 h-5" />
           <span className="text-xs uppercase tracking-widest font-mono font-semibold">
-            Field Journal & Discovery Log
+            {isTransferModeActive ? 'Triton-IV Technical Manual' : 'Field Journal & Discovery Log'}
           </span>
         </div>
 
@@ -69,8 +80,12 @@ export const ReadingPanel: React.FC = () => {
             </span>
           )}
 
-          <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-amber-950/60 text-amber-300 border border-amber-800/60 font-semibold">
-            Stage {currentChallengeIndex + 1} of 6
+          <span className={`text-xs font-mono px-2.5 py-0.5 rounded-full font-semibold ${
+            isTransferModeActive
+              ? 'bg-cyan-950/70 text-cyan-300 border border-cyan-700/60 animate-pulse'
+              : 'bg-amber-950/60 text-amber-300 border border-amber-800/60'
+          }`}>
+            {isTransferModeActive ? 'Hero Transfer' : `Stage ${currentChallengeIndex + 1} of 6`}
           </span>
         </div>
       </div>

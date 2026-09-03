@@ -8,7 +8,7 @@ export const DynamicTransferStageViewport: React.FC = () => {
     entities,
     executeAction,
     isComplete,
-    restartFullGame
+    exitHeroTransferScenario
   } = useGameStore();
 
   const isFlowing = Boolean(entities['seawater_intake']?.states?.isFlowing);
@@ -36,10 +36,19 @@ export const DynamicTransferStageViewport: React.FC = () => {
 
         {/* Interior Chamber Viewport */}
         <div className="relative min-h-[380px] w-full rounded-t-2xl border-4 border-cyan-950 bg-[#07131e] flex flex-col items-center justify-between p-6 overflow-hidden">
-          {/* Depth / Status Display */}
+          {/* Depth / Status Display & Exit button */}
           <div className="w-full flex items-center justify-between border-b border-cyan-900/50 pb-3 z-10 font-mono text-[11px]">
-            <div className="text-cyan-400">
-              DEPTH: <span className="text-white font-bold">4,120M</span>
+            <div className="flex items-center gap-3">
+              <div className="text-cyan-400">
+                DEPTH: <span className="text-white font-bold">4,120M</span>
+              </div>
+              <button
+                onClick={exitHeroTransferScenario}
+                className="px-2 py-0.5 rounded text-[10px] font-mono text-slate-400 hover:text-slate-200 bg-slate-800/80 hover:bg-slate-700 border border-slate-600 transition-colors cursor-pointer"
+                title="Return to your observatory stage"
+              >
+                ← Return to Campaign
+              </button>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-cyan-400">COOLANT LOOP:</span>
@@ -65,10 +74,10 @@ export const DynamicTransferStageViewport: React.FC = () => {
                 Reading transfer verified: You successfully recognized and respected the causal loop interlock under high-pressure ocean conditions.
               </p>
               <button
-                onClick={restartFullGame}
+                onClick={exitHeroTransferScenario}
                 className="mt-6 flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 text-xs font-bold font-mono tracking-wider shadow-lg transition-all cursor-pointer"
               >
-                Return to Observatory Campaign <ArrowRight className="w-4 h-4" />
+                Return to Observatory Stage <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           ) : (
