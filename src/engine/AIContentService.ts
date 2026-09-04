@@ -243,3 +243,213 @@ export async function adaptPassage(
   console.warn('[AIContentService] Adapted passage failed validation:', validation.errors);
   return null;
 }
+
+export interface AIDiagnosisResult {
+  diagnosis: string;
+  targetSkill: import('../types/learner').ReadingSkill;
+  targetMisconception: import('../types/learner').MisconceptionId;
+  confidence: number;
+  recommendedIntervention: import('../types/game').InteractionArchetype;
+  recommendedWorld: 'lost_observatory' | 'arctic_station' | 'triton_deep_sea' | 'orbital_habitat';
+  recommendedDifficulty: ReadingDifficulty;
+  ambiguity: 'low' | 'moderate' | 'high';
+  supportLevel: 0 | 1 | 2 | 3;
+  documentTypes: string[];
+  primaryActionPattern: import('../types/director').PrimaryPlayerActionPattern;
+  reason: string;
+}
+
+/**
+ * Perform structured AI Diagnosis call using Gemini.
+ * Prompted with learner skill vector, misconception probabilities, action order, document behavior.
+ * Returns structured JSON validated against registered game domains.
+ */
+export async function requestAIDiagnosis(
+  profile: import('../types/learner').LearnerProfile,
+  currentWorldId: string
+): Promise<AIDiagnosisResult | null> {
+  if (!isAIAvailable()) return null;
+
+  TelemetryService.record('AI_DIAGNOSIS_STARTED', currentWorldId, {
+    skills: profile.skills,
+    errorPatterns: profile.errorPatterns,
+  });
+
+  const prompt = `You are the AI Experience Director for Text Physics, an adaptive reading adventure game.
+Analyze the following learner cognitive profile, behavioral evidence log, and past experience memory:
+
+LEARNER SKILL VECTOR:
+${JSON.stringify(profile.skills, null, 2)}
+
+LEARNER MISCONCEPTION PROBABILITIES (0.0 to 1.0):
+${JSON.stringify(profile.misconceptions || {}, null, 2)}
+
+RECENT BEHAVIORAL LOG:
+- Documents Opened: ${JSON.stringify(profile.behavioralLog?.documentsOpened || [])}
+- Reading Order: ${JSON.stringify(profile.behavioralLog?.readingOrder || [])}
+- Actions Attempted: ${JSON.stringify(profile.behavioralLog?.actionsAttempted || [])}
+- Repeated Guesses: ${profile.behavioralLog?.repeatedGuesses || 0}
+- Lucky Answer History: ${JSON.stringify(profile.behavioralLog?.luckyAnswerCounts || {})}
+
+EXPERIENCE MEMORY:
+- Worlds Experienced: ${JSON.stringify(profile.experienceMemory?.worldsExperienced || [])}
+- Archetypes Experienced: ${JSON.stringify(profile.experienceMemory?.archetypesExperienced || [])}
+
+AVAILABLE DOMAINS (Strict Guardrail: you MUST only choose from these registered options):
+- Worlds: ["lost_observatory", "arctic_station", "triton_deep_sea", "orbital_habitat"]
+- Gameplay Archetypes: ["INVESTIGATION", "MECHANISM", "TIMELINE", "RESOURCE", "SORT", "CALIBRATE", "SYNTHESIS", "EVIDENCE", "ROUTE"]
+- Primary Action Patterns: ["EVALUATE_AND_INSPECT", "ARRANGE_AND_OPERATE", "ALLOCATE_UNDER_EXCLUSION", "DEDUCE_STATE_AND_COMMIT", "FORENSIC_RETRIEVAL"]
+- Document Types: ["field_journal", "maintenance_manual", "emergency_log", "witness_transcript", "scientific_report", "radio_transcript"]
+- Target Skills: ["literalRetrieval", "sequencing", "causeEffect", "negativeConstraint", "multiCondition", "inference", "synthesis", "transfer"]
+- Target Misconceptions: ["temporal_reversal", "causal_inversion", "ignored_negation", "missed_prerequisite", "superficial_keyword_matching", "premature_commitment", "insufficient_evidence", "overgeneralization", "sequence_causation_confusion", "transfer_failure"]
+
+CRITICAL PEDAGOGICAL RULES:
+1. If the learner exhibits sequence_causation_confusion or causal_inversion:
+   - Prescribe world: "arctic_station" or "triton_deep_sea"
+   - Archetype: "INVESTIGATION" or "EVIDENCE"
+   - Action Pattern: "EVALUATE_AND_INSPECT"
+   - Ambiguity: "high"
+2. If the learner exhibits temporal_reversal or sequencing weakness:
+   - Prescribe world: "lost_observatory"
+   - Archetype: "TIMELINE" or "MECHANISM"
+   - Action Pattern: "ARRANGE_AND_OPERATE"
+   - Ambiguity: "low"
+3. If the learner exhibits ignored_negation:
+   - Prescribe world: "lost_observatory" or "arctic_station"
+   - Archetype: "RESOURCE" or "ROUTE"
+   - Action Pattern: "ALLOCATE_UNDER_EXCLUSION"
+4. Avoid immediate repetition of the same archetype or world unless pedagogical necessity demands it.
+
+Output strictly valid JSON with this exact schema:
+{
+  "diagnosis": "string",
+  "targetSkill": "string",
+  "targetMisconception": "string",
+  "confidence": 0.85,
+  "recommendedIntervention": "string",
+  "recommendedWorld": "string",
+  "recommendedDifficulty": "beginner" | "intermediate" | "advanced",
+  "ambiguity": "low" | "moderate" | "high",
+  "supportLevel": 0 | 1 | 2 | 3,
+  "documentTypes": ["string", "string"],
+  "primaryActionPattern": "string",
+  "reason": "string"
+}`;
+
+  try {
+    const result = (await callGemini(prompt)) as any;
+    if (
+      result &&
+      result.diagnosis &&
+      result.targetSkill &&
+      result.recommendedIntervention &&
+      result.recommendedWorld
+    ) {
+      TelemetryService.record('AI_DIAGNOSIS_COMPLETED', currentWorldId, {
+        diagnosis: result.diagnosis,
+        targetSkill: result.targetSkill,
+        world: result.recommendedWorld,
+        archetype: result.recommendedIntervention,
+      });
+      return {
+        diagnosis: String(result.diagnosis),
+        targetSkill: result.targetSkill,
+        targetMisconception: result.targetMisconception || 'sequence_causation_confusion',
+        confidence: Number(result.confidence) || 0.75,
+        recommendedIntervention: result.recommendedIntervention,
+        recommendedWorld: result.recommendedWorld,
+        recommendedDifficulty: result.recommendedDifficulty || profile.readingDifficulty,
+        ambiguity: result.ambiguity || 'moderate',
+        supportLevel: (result.supportLevel ?? 1) as 0 | 1 | 2 | 3,
+        documentTypes: Array.isArray(result.documentTypes) ? result.documentTypes : ['emergency_log', 'scientific_report'],
+        primaryActionPattern: result.primaryActionPattern || 'EVALUATE_AND_INSPECT',
+        reason: String(result.reason || ''),
+      };
+    }
+  } catch (err) {
+    console.warn('[AIContentService] AI Diagnosis call failed, using fallback:', err);
+  }
+
+  return null;
+}
+
+/**
+ * Generate a multi-document scenario specification based on diagnosis.
+ */
+export async function generateMultiDocumentScenarioSpec(
+  diagnosis: AIDiagnosisResult
+): Promise<import('../types/scenario').AIScenarioSpecification | null> {
+  if (!isAIAvailable()) return null;
+
+  TelemetryService.record('SCENARIO_GENERATION_STARTED', diagnosis.recommendedWorld, {
+    targetSkill: diagnosis.targetSkill,
+    archetype: diagnosis.recommendedIntervention,
+  });
+
+  const prompt = `You are the AI Scenario Architect for Text Physics.
+Generate a structured multi-document scenario specification for:
+- World: "${diagnosis.recommendedWorld}"
+- Archetype: "${diagnosis.recommendedIntervention}"
+- Target Skill: "${diagnosis.targetSkill}"
+- Target Misconception: "${diagnosis.targetMisconception}"
+- Difficulty: "${diagnosis.recommendedDifficulty}"
+- Ambiguity: "${diagnosis.ambiguity}"
+
+REQUIREMENTS:
+1. Every document must have a distinct INFORMATION ROLE:
+   - "event_timing": establishes chronology
+   - "physical_mechanism": establishes physical operating laws
+   - "misleading_correlation": introduces a plausible false hypothesis
+   - "confirmatory_evidence": confirms ground truth or refutes false hypothesis
+2. Include an UNDERLYING KNOWLEDGE GRAPH with facts and relations (BEFORE, CAUSED, DID_NOT_CAUSE, DEPENDS_ON, EXCLUDES).
+3. Do NOT include solution spoilers or answers in instructions.
+4. Output strictly valid JSON matching this schema:
+{
+  "world": "${diagnosis.recommendedWorld}",
+  "archetype": "${diagnosis.recommendedIntervention}",
+  "targetSkill": "${diagnosis.targetSkill}",
+  "targetMisconception": "${diagnosis.targetMisconception}",
+  "difficulty": "${diagnosis.recommendedDifficulty}",
+  "ambiguity": "${diagnosis.ambiguity}",
+  "centralMystery": "string",
+  "documents": [
+    {
+      "id": "string",
+      "title": "string",
+      "type": "string",
+      "source": "string",
+      "role": "event_timing" | "physical_mechanism" | "misleading_correlation" | "confirmatory_evidence",
+      "paragraphs": ["string"],
+      "keyClues": ["string"],
+      "factsCovered": ["fact_1"]
+    }
+  ],
+  "requiredFacts": [
+    { "id": "fact_1", "statement": "string", "sourceDocumentId": "string" }
+  ],
+  "requiredRelations": [
+    { "id": "rel_1", "subjectFactId": "fact_1", "relation": "CAUSED", "objectFactId": "fact_2", "description": "string" }
+  ],
+  "plausibleFalseHypothesis": "string",
+  "requiredInference": "string",
+  "supportStrategy": "string",
+  "failureConsequences": ["string"],
+  "successConsequences": ["string"],
+  "topologyId": "TOP-2",
+  "evidenceSnippet": "string"
+}`;
+
+  try {
+    const res = (await callGemini(prompt)) as any;
+    if (res && res.world && Array.isArray(res.documents)) {
+      TelemetryService.record('SCENARIO_GENERATION_COMPLETED', diagnosis.recommendedWorld, {
+        documentCount: res.documents.length,
+      });
+      return res as import('../types/scenario').AIScenarioSpecification;
+    }
+  } catch (err) {
+    console.warn('[AIContentService] AI Multi-document scenario generation failed:', err);
+  }
+
+  return null;
+}

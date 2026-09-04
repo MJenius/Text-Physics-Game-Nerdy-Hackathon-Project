@@ -920,6 +920,17 @@ export const useGameStore = create<GameStore>()(
               // Update skills
               const skillKey = SKILL_KEY_MAP[currentChallenge.targetReadingSkill];
               if (skillKey) {
+                const isTransfer = draft.isTransferModeActive || draft.currentChallengeId === 'hero_triton_transfer';
+                if (isTransfer) {
+                  useLearnerStore.getState().recordLuckyAnswerOutcome('transfer_success', 'transfer');
+                } else if (draft.rereadCount > 0 && draft.failedAttempts === 0) {
+                  useLearnerStore.getState().recordLuckyAnswerOutcome('correct_answer_correct_evidence', skillKey);
+                } else if (draft.failedAttempts === 0) {
+                  useLearnerStore.getState().recordLuckyAnswerOutcome('correct_answer_correct_evidence', skillKey);
+                } else {
+                  useLearnerStore.getState().recordLuckyAnswerOutcome('correct_answer_weak_evidence', skillKey);
+                }
+
                 useLearnerStore.getState().recordChallengeResult({
                   challengeId: draft.currentChallengeId,
                   skill: skillKey,
@@ -933,7 +944,16 @@ export const useGameStore = create<GameStore>()(
                 const profile = useLearnerStore.getState().profile;
                 if (profile) {
                   const prescription = GameDirector.diagnoseAndPrescribe(profile, draft.currentChallengeId);
-                  useLearnerStore.getState().setDirectorDiagnosis(prescription.statusHeadline, prescription.learnerInsight);
+                  useLearnerStore.getState().setDirectorDiagnosis(prescription.statusHeadline, prescription.learnerInsight, {
+                    diagnosisText: prescription.learnerInsight,
+                    targetSkill: prescription.targetSkill,
+                    recommendedIntervention: prescription.experienceArchetype,
+                    recommendedWorld: prescription.theme,
+                    recommendedDifficulty: prescription.recommendedDifficulty,
+                    ambiguity: prescription.ambiguityLevel,
+                    supportLevel: prescription.scaffoldingLevel,
+                    documentTypes: prescription.documentTypes,
+                  });
                 }
               }
             }
@@ -957,26 +977,39 @@ export const useGameStore = create<GameStore>()(
 
             // Classify error pattern
             let errorType: 'causal_inversion' | 'temporal_reversal' | 'ignored_negation' | 'superficial_guessing' = 'causal_inversion';
-            if (draft.currentChallengeId === 'act_2_hydraulics' || draft.currentChallengeId === 'hero_triton_transfer') {
+            if (draft.currentChallengeId === 'act_2_hydraulics' || draft.currentChallengeId === 'hero_triton_transfer' || draft.currentChallengeId === 'act_2_clock') {
               errorType = 'causal_inversion';
               useLearnerStore.getState().recordErrorPattern('causalInversions');
+              useLearnerStore.getState().recordMisconceptionEvidence('sequence_causation_confusion', 0.20);
+              useLearnerStore.getState().recordMisconceptionEvidence('causal_inversion', 0.18);
             } else if (draft.currentChallengeId === 'act_1_vestibule') {
               errorType = 'temporal_reversal';
               useLearnerStore.getState().recordErrorPattern('temporalReversals');
+              useLearnerStore.getState().recordMisconceptionEvidence('temporal_reversal', 0.22);
             } else if (draft.currentChallengeId === 'act_3_junction') {
               errorType = 'ignored_negation';
               useLearnerStore.getState().recordErrorPattern('ignoredNegations');
+              useLearnerStore.getState().recordMisconceptionEvidence('ignored_negation', 0.25);
             }
 
             const profile = useLearnerStore.getState().profile;
             if (profile) {
               const prescription = GameDirector.diagnoseAndPrescribe(profile, draft.currentChallengeId, errorType);
-              useLearnerStore.getState().setDirectorDiagnosis(prescription.statusHeadline, prescription.learnerInsight);
+              useLearnerStore.getState().setDirectorDiagnosis(prescription.statusHeadline, prescription.learnerInsight, {
+                diagnosisText: prescription.learnerInsight,
+                targetSkill: prescription.targetSkill,
+                recommendedIntervention: prescription.experienceArchetype,
+                recommendedWorld: prescription.theme,
+                recommendedDifficulty: prescription.recommendedDifficulty,
+                ambiguity: prescription.ambiguityLevel,
+                supportLevel: prescription.scaffoldingLevel,
+                documentTypes: prescription.documentTypes,
+              });
             }
 
             const skillKey = SKILL_KEY_MAP[currentChallenge.targetReadingSkill];
             if (skillKey) {
-              useLearnerStore.getState().updateSkill(skillKey, -0.04);
+              useLearnerStore.getState().recordLuckyAnswerOutcome('wrong_answer_irrelevant_reasoning', skillKey);
             }
 
             TelemetryService.record('PHYSICAL_CONSEQUENCE_TRIGGERED', draft.currentChallengeId, {

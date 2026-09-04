@@ -63,8 +63,12 @@ export function getPersonalizedRereadingPrompt(
       'Find the warning in the text. What does it say you must NOT do?',
     multiCondition:
       'The passage lists multiple conditions. Find ALL of them — every one must be satisfied.',
+    inference:
+      'Connect the clues across documents. What underlying principle is implied even if not stated outright?',
     synthesis:
       'This challenge combines several systems. Check each requirement the passage describes.',
+    transfer:
+      'Recognize the isomorphic reasoning structure: how does your past experience apply to this new environment?',
   };
 
   return prompts[skill] || 'Reread the passage carefully and look for the key conditions.';

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useLearnerStore } from '../engine/LearnerStore';
 import { useGameStore } from '../engine/GameStore';
+import { GameDirector } from '../engine/GameDirector';
 import { Sparkles, Compass, Cpu, Sliders, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface DirectorHUDProps {
@@ -11,7 +12,6 @@ interface DirectorHUDProps {
 export const DirectorHUD: React.FC<DirectorHUDProps> = ({ onOpenTransfer, canTriggerTransfer }) => {
   const { profile } = useLearnerStore();
   const {
-    simulateWeaknessProfile,
     jumpToAct,
     currentAct,
     activeArchetype,
@@ -118,31 +118,42 @@ export const DirectorHUD: React.FC<DirectorHUDProps> = ({ onOpenTransfer, canTri
             <div className="flex flex-wrap gap-1.5">
               <button
                 onClick={() => {
-                  simulateWeaknessProfile('causal_inversion');
-                  jumpToAct(5);
+                  useLearnerStore.getState().applySyntheticProfile('PROFILE_CAUSAL');
+                  const prof = useLearnerStore.getState().profile!;
+                  const rx = GameDirector.diagnoseAndPrescribe(prof, currentChallengeId);
+                  useLearnerStore.getState().setDirectorDiagnosis(rx.statusHeadline, rx.learnerInsight);
+                  useGameStore.getState().setWorld('arctic_station');
                 }}
                 className="px-2.5 py-1 rounded bg-stone-800 hover:bg-rose-950 text-stone-200 hover:text-rose-200 border border-stone-700 hover:border-rose-500 text-[10px] transition-colors cursor-pointer"
-                title="Simulates causal loop difficulty and adapts Act V to Incident Investigation"
+                title="Causal weakness: routes to Arctic Boreas Investigation (Action Pattern: Evaluate & Inspect Evidence)"
               >
-                ✦ Simulate Causal Inversion → Act V
+                ✦ Causal Weakness → Arctic Investigation
               </button>
               <button
                 onClick={() => {
-                  simulateWeaknessProfile('temporal_reversal');
-                  jumpToAct(1);
+                  useLearnerStore.getState().applySyntheticProfile('PROFILE_SEQUENCE');
+                  const prof = useLearnerStore.getState().profile!;
+                  const rx = GameDirector.diagnoseAndPrescribe(prof, currentChallengeId);
+                  useLearnerStore.getState().setDirectorDiagnosis(rx.statusHeadline, rx.learnerInsight);
+                  useGameStore.getState().setWorld('lost_observatory');
                 }}
                 className="px-2.5 py-1 rounded bg-stone-800 hover:bg-amber-950 text-stone-200 hover:text-amber-200 border border-stone-700 hover:border-amber-500 text-[10px] transition-colors cursor-pointer"
+                title="Sequencing weakness: routes to Observatory Timeline (Action Pattern: Arrange & Operate Mechanisms)"
               >
-                ✦ Simulate Sequence Error
+                ✦ Sequence Weakness → Observatory Timeline
               </button>
               <button
                 onClick={() => {
-                  simulateWeaknessProfile('ignored_negation');
+                  useLearnerStore.getState().applySyntheticProfile('PROFILE_NEGATION');
+                  const prof = useLearnerStore.getState().profile!;
+                  const rx = GameDirector.diagnoseAndPrescribe(prof, currentChallengeId);
+                  useLearnerStore.getState().setDirectorDiagnosis(rx.statusHeadline, rx.learnerInsight);
                   jumpToAct(3);
                 }}
                 className="px-2.5 py-1 rounded bg-stone-800 hover:bg-cyan-950 text-stone-200 hover:text-cyan-200 border border-stone-700 hover:border-cyan-500 text-[10px] transition-colors cursor-pointer"
+                title="Negation weakness: routes to Power Junction Resource Allocation (Action Pattern: Allocate Under Exclusion)"
               >
-                ✦ Simulate Negation Error → Act III
+                ✦ Negation Weakness → Route Exclusion
               </button>
             </div>
 
