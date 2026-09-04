@@ -6,24 +6,30 @@ import {
   CheckCircle2,
   Brush,
   Diamond,
-  Package
+  Package,
+  Zap
 } from 'lucide-react';
 import type { EntityId } from '../types/game';
 
 export const InventoryBar: React.FC = () => {
   const { inventory, entities, selectedInventoryItem, selectInventoryItem } = useGameStore();
 
-  const getIcon = (id: EntityId) => {
+  const getIcon = (id: EntityId, entityIcon?: string) => {
     switch (id) {
       case 'oxidized_key':
         return <KeyRound className="w-4 h-4 text-emerald-400" />;
+      case 'iron_key':
       case 'brass_key':
         return <Key className="w-4 h-4 text-amber-400" />;
       case 'cleaning_brush':
         return <Brush className="w-4 h-4 text-amber-300" />;
       case 'quartz_prism':
         return <Diamond className="w-4 h-4 text-cyan-300" />;
+      case 'replacement_shunt':
+        return <Zap className="w-4 h-4 text-yellow-400" />;
       default:
+        if (entityIcon === 'Zap') return <Zap className="w-4 h-4 text-yellow-400" />;
+        if (entityIcon === 'Key') return <Key className="w-4 h-4 text-amber-400" />;
         return <Package className="w-4 h-4 text-slate-300" />;
     }
   };
@@ -55,7 +61,7 @@ export const InventoryBar: React.FC = () => {
                       : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800 hover:border-slate-600'
                   }`}
                 >
-                  <span className="shrink-0">{getIcon(itemId)}</span>
+                  <span className="shrink-0">{getIcon(itemId, (item as any).icon)}</span>
                   <span>{item.name}</span>
                   {isSelected && (
                     <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0 ml-1" />

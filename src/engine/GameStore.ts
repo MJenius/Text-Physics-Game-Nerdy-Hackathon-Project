@@ -31,6 +31,7 @@ import { SoundFX } from './SoundFX';
 import { TRITON_TRANSFER_SCENARIO } from '../content/heroTransferScenario';
 import { ARCTIC_SCENES, ARCTIC_ENTITIES, ARCTIC_RULES } from '../content/arcticCampaign';
 import { TRITON_SCENES, TRITON_ENTITIES, TRITON_RULES } from '../content/tritonCampaign';
+import { ORBITAL_SCENES, ORBITAL_ENTITIES, ORBITAL_RULES } from '../content/orbitalCampaign';
 import { getWorldDefinition } from '../worlds/worldRegistry';
 import type { WorldId } from '../worlds/worldTypes';
 
@@ -126,7 +127,8 @@ const INITIAL_NARRATIVE: NarrativeWorldState = {
 export const ALL_WORLD_SCENES: Record<string, Challenge> = {
   ...CAMPAIGN_SCENES,
   ...ARCTIC_SCENES,
-  ...TRITON_SCENES
+  ...TRITON_SCENES,
+  ...ORBITAL_SCENES
 };
 
 const getSceneEntities = (sceneId: string): Record<string, any> => {
@@ -135,6 +137,9 @@ const getSceneEntities = (sceneId: string): Record<string, any> => {
   }
   if (sceneId.startsWith('triton_')) {
     return JSON.parse(JSON.stringify(TRITON_ENTITIES));
+  }
+  if (sceneId.startsWith('orbital_')) {
+    return JSON.parse(JSON.stringify(ORBITAL_ENTITIES));
   }
   switch (sceneId) {
     case 'act_1_vestibule':
@@ -434,6 +439,31 @@ export const useGameStore = create<GameStore>()(
           return;
         }
 
+        // ── AI DIRECTOR PRESCRIBED SCENE ROUTING ──────────────────────
+        // If the Director has an active prescription with a specific scene,
+        // route the learner there instead of following hardcoded progression.
+        const learnerProfile = useLearnerStore.getState().profile;
+        const directorDiag = learnerProfile?.lastDiagnosis;
+        if (directorDiag && (directorDiag as any).prescribedSceneId) {
+          const prescribedId = (directorDiag as any).prescribedSceneId as string;
+          // Verify the prescribed scene exists in our scene registry before routing
+          const prescribedScene = ALL_WORLD_SCENES[prescribedId];
+          if (prescribedScene && prescribedId !== currentScene?.id) {
+            // Consume the prescription to prevent infinite re-routing
+            useLearnerStore.getState().setDirectorDiagnosis(
+              directorDiag.headline,
+              directorDiag.insight,
+              { ...directorDiag, prescribedSceneId: undefined } as any
+            );
+            TelemetryService.record('DIRECTOR_SCENE_REDIRECT', prescribedId, {
+              from: currentScene?.id,
+              reason: directorDiag.recommendedIntervention,
+            });
+            get().transitionToScene(prescribedId);
+            return;
+          }
+        }
+
         // Arctic progression
         if (currentScene.id === 'arctic_act_1_airlock') {
           get().transitionToScene('arctic_act_2_thermal');
@@ -589,6 +619,9 @@ export const useGameStore = create<GameStore>()(
               draft.isTransferModeActive = false;
             });
           }
+          set((draft) => {
+            draft.narrative.activeWorldId = 'lost_observatory';
+          });
           get().transitionToScene(targetSceneId);
         }
       },
@@ -601,11 +634,14 @@ export const useGameStore = create<GameStore>()(
             ? 'arctic_act_1_airlock'
             : worldId === 'triton_deep_sea'
             ? 'triton_act_1_vapor'
+            : worldId === 'orbital_habitat'
+            ? 'orbital_act_1_coronagraph'
             : 'act_1_vestibule');
 
         const fresh = getInitialSceneState(startingSceneId);
         set((draft) => {
           Object.assign(draft, fresh);
+          draft.isTransferModeActive = false;
           draft.narrative.activeWorldId = worldId;
           draft.lastFeedback = {
             type: 'info',
@@ -799,7 +835,7 @@ export const useGameStore = create<GameStore>()(
         // 2. Query Candidate Rules
         const allAvailableRules = state.isTransferModeActive
           ? [...TRITON_TRANSFER_SCENARIO.rules]
-          : [...ALL_CAMPAIGN_RULES, ...ARCTIC_RULES, ...TRITON_RULES];
+          : [...ALL_CAMPAIGN_RULES, ...ARCTIC_RULES, ...TRITON_RULES, ...ORBITAL_RULES];
 
         const relevantRules = allAvailableRules.filter((r) => {
           if (r.challengeId !== state.currentChallengeId) return false;
@@ -975,14 +1011,24 @@ export const useGameStore = create<GameStore>()(
               isError: true
             };
 
-            // Classify error pattern
+            // Classify error pattern (covers all worlds)
             let errorType: 'causal_inversion' | 'temporal_reversal' | 'ignored_negation' | 'superficial_guessing' = 'causal_inversion';
-            if (draft.currentChallengeId === 'act_2_hydraulics' || draft.currentChallengeId === 'hero_triton_transfer' || draft.currentChallengeId === 'act_2_clock') {
+            if (
+              draft.currentChallengeId === 'act_2_hydraulics' ||
+              draft.currentChallengeId === 'hero_triton_transfer' ||
+              draft.currentChallengeId === 'act_2_clock' ||
+              draft.currentChallengeId === 'arctic_act_2_thermal' ||
+              draft.currentChallengeId === 'triton_act_1_vapor' ||
+              draft.currentChallengeId === 'triton_act_2_cavitation'
+            ) {
               errorType = 'causal_inversion';
               useLearnerStore.getState().recordErrorPattern('causalInversions');
               useLearnerStore.getState().recordMisconceptionEvidence('sequence_causation_confusion', 0.20);
               useLearnerStore.getState().recordMisconceptionEvidence('causal_inversion', 0.18);
-            } else if (draft.currentChallengeId === 'act_1_vestibule') {
+            } else if (
+              draft.currentChallengeId === 'act_1_vestibule' ||
+              draft.currentChallengeId === 'arctic_act_1_airlock'
+            ) {
               errorType = 'temporal_reversal';
               useLearnerStore.getState().recordErrorPattern('temporalReversals');
               useLearnerStore.getState().recordMisconceptionEvidence('temporal_reversal', 0.22);
@@ -990,21 +1036,53 @@ export const useGameStore = create<GameStore>()(
               errorType = 'ignored_negation';
               useLearnerStore.getState().recordErrorPattern('ignoredNegations');
               useLearnerStore.getState().recordMisconceptionEvidence('ignored_negation', 0.25);
+            } else if (draft.currentChallengeId === 'arctic_act_3_stratigraphy') {
+              errorType = 'superficial_guessing';
+              useLearnerStore.getState().recordErrorPattern('superficialGuesses');
+              useLearnerStore.getState().recordMisconceptionEvidence('superficial_keyword_matching', 0.20);
             }
 
             const profile = useLearnerStore.getState().profile;
             if (profile) {
+              // Immediate deterministic prescription (non-blocking)
               const prescription = GameDirector.diagnoseAndPrescribe(profile, draft.currentChallengeId, errorType);
               useLearnerStore.getState().setDirectorDiagnosis(prescription.statusHeadline, prescription.learnerInsight, {
                 diagnosisText: prescription.learnerInsight,
                 targetSkill: prescription.targetSkill,
+                targetMisconception: prescription.errorDiagnosed as import('../types/learner').MisconceptionId | undefined,
                 recommendedIntervention: prescription.experienceArchetype,
                 recommendedWorld: prescription.theme,
                 recommendedDifficulty: prescription.recommendedDifficulty,
                 ambiguity: prescription.ambiguityLevel,
                 supportLevel: prescription.scaffoldingLevel,
                 documentTypes: prescription.documentTypes,
-              });
+                prescribedSceneId: prescription.prescribedSceneId,
+              } as any);
+
+              // Fire async AI diagnosis in background (non-blocking, updates prescription when complete)
+              GameDirector.diagnoseAndPrescribeAI(
+                profile,
+                draft.currentChallengeId,
+                draft.narrative.activeWorldId || 'lost_observatory',
+                errorType
+              ).then((aiPrescription) => {
+                const currentProfile = useLearnerStore.getState().profile;
+                if (currentProfile) {
+                  useLearnerStore.getState().setDirectorDiagnosis(aiPrescription.statusHeadline, aiPrescription.learnerInsight, {
+                    diagnosisText: aiPrescription.learnerInsight,
+                    targetSkill: aiPrescription.targetSkill,
+                    targetMisconception: aiPrescription.errorDiagnosed as import('../types/learner').MisconceptionId | undefined,
+                    recommendedIntervention: aiPrescription.experienceArchetype,
+                    recommendedWorld: aiPrescription.theme,
+                    recommendedDifficulty: aiPrescription.recommendedDifficulty,
+                    ambiguity: aiPrescription.ambiguityLevel,
+                    supportLevel: aiPrescription.scaffoldingLevel,
+                    documentTypes: aiPrescription.documentTypes,
+                    prescribedSceneId: aiPrescription.prescribedSceneId,
+                  } as any);
+                }
+              }).catch(() => { /* AI diagnosis failed silently; deterministic prescription stands */ });
+              TelemetryService.record('ASYNC_AI_DIAGNOSIS_TRIGGERED', draft.currentChallengeId, { errorType });
             }
 
             const skillKey = SKILL_KEY_MAP[currentChallenge.targetReadingSkill];

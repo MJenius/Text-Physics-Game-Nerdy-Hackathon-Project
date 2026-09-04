@@ -11,7 +11,8 @@ import {
   Cpu,
   RefreshCw,
   Zap,
-  Database
+  Database,
+  GitBranch
 } from 'lucide-react';
 
 interface DirectorInspectorProps {
@@ -31,7 +32,8 @@ export const DirectorInspector: React.FC<DirectorInspectorProps> = ({ isOpen, on
   } = useGameStore();
 
   const { profile } = useLearnerStore();
-  const [activeTab, setActiveTab] = useState<'overview' | 'world_state' | 'telemetry' | 'controls'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'world_state' | 'telemetry' | 'pipeline' | 'controls'>('overview');
+  const [compareResult, setCompareResult] = useState<Array<{name: string; targetSkill: string; theme: string; archetype: string; actionPattern: string; ambiguity: string; scaffolding: number}>>([]);
   const [telemetryEvents, setTelemetryEvents] = useState(TelemetryService.getEvents());
 
   useEffect(() => {
@@ -111,6 +113,19 @@ export const DirectorInspector: React.FC<DirectorInspectorProps> = ({ isOpen, on
           >
             <Cpu className="w-3.5 h-3.5" />
             Live Telemetry Stream ({telemetryEvents.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('pipeline')}
+            className={`px-4 py-2.5 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'pipeline'
+                ? 'border-cyan-400 text-cyan-300 font-bold bg-cyan-950/30'
+                : 'border-transparent text-stone-400 hover:text-stone-200'
+            }`}
+          >
+            <GitBranch className="w-3.5 h-3.5" />
+            Pipeline & Timeline
           </button>
 
           <button
@@ -318,7 +333,183 @@ export const DirectorInspector: React.FC<DirectorInspectorProps> = ({ isOpen, on
             </div>
           )}
 
-          {/* TAB 4: CONTROLS & JUMP */}
+          {/* TAB 4: PIPELINE & EVENT TIMELINE */}
+          {activeTab === 'pipeline' && (
+            <div className="space-y-5">
+              {/* Pipeline Status */}
+              <div>
+                <span className="text-[10px] text-stone-400 uppercase block font-bold mb-3">
+                  AI Director Pipeline Status:
+                </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[
+                    { label: 'PLAYER ACTION', active: true },
+                    { label: '→', active: false },
+                    { label: 'TELEMETRY', active: telemetryEvents.length > 0 },
+                    { label: '→', active: false },
+                    { label: 'LEARNER MODEL', active: !!profile },
+                    { label: '→', active: false },
+                    { label: 'AI DIAGNOSIS', active: !!profile?.lastDiagnosis },
+                    { label: '→', active: false },
+                    { label: 'PRESCRIPTION', active: !!profile?.lastDiagnosis?.recommendedIntervention },
+                    { label: '→', active: false },
+                    { label: 'SCENARIO COMPILER', active: true },
+                    { label: '→', active: false },
+                    { label: 'DETERMINISTIC RUNTIME', active: true },
+                  ].map((step, i) =>
+                    step.label === '→' ? (
+                      <span key={i} className="text-cyan-600 text-xs">→</span>
+                    ) : (
+                      <span
+                        key={i}
+                        className={`px-2 py-1 rounded text-[9px] font-bold uppercase ${
+                          step.active
+                            ? 'bg-cyan-900/50 border border-cyan-700 text-cyan-200'
+                            : 'bg-stone-900 border border-stone-800 text-stone-500'
+                        }`}
+                      >
+                        {step.label}
+                      </span>
+                    )
+                  )}
+                </div>
+              </div>
+
+              {/* Current Prescription Detail */}
+              {profile?.lastDiagnosis && (
+                <div className="p-4 rounded-xl bg-stone-900/60 border border-cyan-900/40 space-y-2">
+                  <span className="text-[10px] text-stone-400 uppercase block font-bold">Active Prescription:</span>
+                  <div className="text-sm text-cyan-300 font-bold">{profile.lastDiagnosis.headline}</div>
+                  <div className="text-xs text-stone-300">{profile.lastDiagnosis.insight}</div>
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    <div className="text-[10px]">
+                      <span className="text-stone-500">Skill:</span>{' '}
+                      <span className="text-amber-300">{profile.lastDiagnosis.targetSkill || '—'}</span>
+                    </div>
+                    <div className="text-[10px]">
+                      <span className="text-stone-500">Misconception:</span>{' '}
+                      <span className="text-rose-300">{profile.lastDiagnosis.targetMisconception || '—'}</span>
+                    </div>
+                    <div className="text-[10px]">
+                      <span className="text-stone-500">Intervention:</span>{' '}
+                      <span className="text-emerald-300">{profile.lastDiagnosis.recommendedIntervention || '—'}</span>
+                    </div>
+                    <div className="text-[10px]">
+                      <span className="text-stone-500">World:</span>{' '}
+                      <span className="text-cyan-300">{profile.lastDiagnosis.recommendedWorld || '—'}</span>
+                    </div>
+                    <div className="text-[10px]">
+                      <span className="text-stone-500">Ambiguity:</span>{' '}
+                      <span className="text-purple-300">{profile.lastDiagnosis.ambiguity || '—'}</span>
+                    </div>
+                    <div className="text-[10px]">
+                      <span className="text-stone-500">Scaffolding:</span>{' '}
+                      <span className="text-blue-300">{profile.lastDiagnosis.supportLevel ?? '—'}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* One-Click Profile Comparison */}
+              <div>
+                <span className="text-[10px] text-stone-400 uppercase block font-bold mb-2">
+                  One-Click Profile Comparison (Run All 5 Profiles):
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const names = ['PROFILE_CAUSAL', 'PROFILE_SEQUENCE', 'PROFILE_NEGATION', 'PROFILE_SURFACE_GUESSER', 'PROFILE_STRONG_TRANSFER'] as const;
+                    const results = names.map(name => {
+                      useLearnerStore.getState().applySyntheticProfile(name);
+                      const prof = useLearnerStore.getState().profile!;
+                      const rx = GameDirector.diagnoseAndPrescribe(prof, currentChallengeId);
+                      return {
+                        name,
+                        targetSkill: rx.targetSkill,
+                        theme: rx.theme,
+                        archetype: rx.experienceArchetype,
+                        actionPattern: rx.primaryActionPattern,
+                        ambiguity: rx.ambiguityLevel,
+                        scaffolding: rx.scaffoldingLevel,
+                      };
+                    });
+                    setCompareResult(results);
+                  }}
+                  className="px-4 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-stone-950 font-bold text-xs cursor-pointer mb-3"
+                >
+                  <RefreshCw className="w-3 h-3 inline mr-1" />
+                  Run Prescription Comparison
+                </button>
+
+                {compareResult.length > 0 && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[10px] border-collapse">
+                      <thead>
+                        <tr className="border-b border-stone-800">
+                          <th className="text-left p-1.5 text-stone-400">Profile</th>
+                          <th className="text-left p-1.5 text-stone-400">Skill</th>
+                          <th className="text-left p-1.5 text-stone-400">World</th>
+                          <th className="text-left p-1.5 text-stone-400">Archetype</th>
+                          <th className="text-left p-1.5 text-stone-400">Action Pattern</th>
+                          <th className="text-left p-1.5 text-stone-400">Ambiguity</th>
+                          <th className="text-left p-1.5 text-stone-400">Scaffold</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {compareResult.map((r, i) => (
+                          <tr key={i} className="border-b border-stone-900">
+                            <td className="p-1.5 text-cyan-300 font-bold">{r.name.replace('PROFILE_', '')}</td>
+                            <td className="p-1.5 text-amber-300">{r.targetSkill}</td>
+                            <td className="p-1.5 text-emerald-300">{r.theme}</td>
+                            <td className="p-1.5 text-purple-300">{r.archetype}</td>
+                            <td className="p-1.5 text-rose-300">{r.actionPattern}</td>
+                            <td className="p-1.5 text-stone-300">{r.ambiguity}</td>
+                            <td className="p-1.5 text-stone-300">{r.scaffolding}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Recent Pipeline Events */}
+              <div>
+                <span className="text-[10px] text-stone-400 uppercase block font-bold mb-2">
+                  Recent Pipeline Events (last 15):
+                </span>
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {telemetryEvents.filter(e =>
+                    ['AI_DIAGNOSIS_STARTED', 'AI_DIAGNOSIS_COMPLETED', 'AI_PRESCRIPTION_CREATED',
+                     'MISCONCEPTION_UPDATED', 'SKILL_UPDATED', 'DIRECTOR_SCENE_REDIRECT',
+                     'ASYNC_AI_DIAGNOSIS_TRIGGERED', 'SCENE_TRANSITIONED', 'ACTION_EVALUATED',
+                     'PHYSICAL_CONSEQUENCE_TRIGGERED'].includes(e.type)
+                  ).slice(-15).reverse().map((e, i) => (
+                    <div key={i} className="flex items-center gap-2 text-[10px] py-0.5">
+                      <span className="text-stone-600 w-16 shrink-0">{new Date(e.timestamp).toLocaleTimeString()}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                        e.type.includes('DIAGNOSIS') ? 'bg-purple-950 text-purple-300 border border-purple-800' :
+                        e.type.includes('PRESCRIPTION') ? 'bg-cyan-950 text-cyan-300 border border-cyan-800' :
+                        e.type.includes('MISCONCEPTION') ? 'bg-rose-950 text-rose-300 border border-rose-800' :
+                        'bg-stone-900 text-stone-300 border border-stone-800'
+                      }`}>{e.type}</span>
+                      <span className="text-stone-500 truncate">{e.challengeId}</span>
+                    </div>
+                  ))}
+                  {telemetryEvents.filter(e =>
+                    ['AI_DIAGNOSIS_STARTED', 'AI_DIAGNOSIS_COMPLETED', 'AI_PRESCRIPTION_CREATED',
+                     'MISCONCEPTION_UPDATED', 'SKILL_UPDATED', 'DIRECTOR_SCENE_REDIRECT',
+                     'ASYNC_AI_DIAGNOSIS_TRIGGERED', 'SCENE_TRANSITIONED', 'ACTION_EVALUATED',
+                     'PHYSICAL_CONSEQUENCE_TRIGGERED'].includes(e.type)
+                  ).length === 0 && (
+                    <div className="text-stone-600 text-[10px]">No pipeline events yet. Trigger an action to observe the chain.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: CONTROLS & JUMP */}
           {activeTab === 'controls' && (
             <div className="space-y-5">
               {/* Synthetic Learner Testing Profiles (Hackathon Showcase requirement 26) */}
@@ -440,15 +631,23 @@ export const DirectorInspector: React.FC<DirectorInspectorProps> = ({ isOpen, on
                     <button
                       key={w.id}
                       type="button"
-                      onClick={() => setWorld(w.id)}
+                      onClick={() => {
+                        setWorld(w.id);
+                        onClose();
+                      }}
                       className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                         narrative.activeWorldId === w.id
-                          ? 'border-cyan-400 bg-cyan-950/40 text-cyan-200'
-                          : 'border-stone-800 bg-stone-900/60 text-stone-400 hover:border-stone-700'
+                          ? 'border-cyan-400 bg-cyan-950/40 text-cyan-200 shadow-[0_0_15px_rgba(6,182,212,0.25)]'
+                          : 'border-stone-800 bg-stone-900/60 text-stone-400 hover:border-stone-700 hover:bg-stone-850'
                       }`}
                     >
-                      <span className="font-bold block text-stone-200">{w.name}</span>
-                      <span className="text-[10px] text-stone-500">{w.tagline}</span>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold block text-stone-200">{w.name}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-stone-800/80 text-cyan-400 border border-cyan-800/40 font-mono">
+                          {narrative.activeWorldId === w.id ? 'Active' : 'Switch World →'}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-stone-500 block">{w.tagline}</span>
                     </button>
                   ))}
                 </div>

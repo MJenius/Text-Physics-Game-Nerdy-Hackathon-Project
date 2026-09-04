@@ -22,8 +22,14 @@ export const TimelineArchetype: React.FC<TimelineArchetypeProps> = ({
   onCommitOrder,
   disabled = false,
 }) => {
-  // Current order of events as manipulated by player
-  const [orderedEvents, setOrderedEvents] = useState<TimelineEvent[]>([...events]);
+  // Current order of events as manipulated by player (shuffled if initially sorted)
+  const [orderedEvents, setOrderedEvents] = useState<TimelineEvent[]>(() => {
+    const isSorted = events.every((ev, idx) => ev.correctChronologicalIndex === idx);
+    if (isSorted && events.length > 1) {
+      return [...events].reverse();
+    }
+    return [...events];
+  });
   // Optional: player selects which earlier event CAUSES the primary crisis
   const [inferredCausalParentId, setInferredCausalParentId] = useState<string | null>(null);
 

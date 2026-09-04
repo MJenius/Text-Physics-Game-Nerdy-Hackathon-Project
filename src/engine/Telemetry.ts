@@ -53,7 +53,9 @@ export type TelemetryEventType =
   | 'WORLD_CHANGED'
   | 'CHARACTER_TRUST_UPDATED'
   | 'HOTSPOT_INSPECTED'
-  | 'ARCHETYPE_COMMITTED';
+  | 'ARCHETYPE_COMMITTED'
+  | 'DIRECTOR_SCENE_REDIRECT'
+  | 'ASYNC_AI_DIAGNOSIS_TRIGGERED';
 
 export interface TelemetryEvent {
   type: TelemetryEventType;

@@ -2,6 +2,7 @@ import type { WorldId, WorldDefinition } from './worldTypes';
 import { CAMPAIGN_SCENES } from '../content/storyCampaign';
 import { ARCTIC_SCENES } from '../content/arcticCampaign';
 import { TRITON_SCENES } from '../content/tritonCampaign';
+import { ORBITAL_SCENES } from '../content/orbitalCampaign';
 
 export const WORLD_REGISTRY: Record<WorldId, WorldDefinition> = {
   lost_observatory: {
@@ -262,6 +263,8 @@ export const WORLD_REGISTRY: Record<WorldId, WorldDefinition> = {
     name: 'Aether-9 Orbital Observatory',
     tagline: 'Solar Corona Interferometry in Low Earth Orbit',
     era: 'Advanced Space Exploration (2078)',
+    startingSceneId: 'orbital_act_1_coronagraph',
+    scenes: ORBITAL_SCENES,
     settingDescription:
       'A counter-rotating astronomical habitat positioned in the Sun-Earth L1 Lagrange point, aligning coronal coronagraphs while solar flare radiation surges across the hull.',
     environmentalVocabulary: [

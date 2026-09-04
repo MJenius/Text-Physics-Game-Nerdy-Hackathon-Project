@@ -56,7 +56,7 @@ describe('AI-Directed Reading Adventure Engine', () => {
 
       expect(prescriptionA.targetSkill).toBe('causeEffect');
       expect(prescriptionA.theme).toBe('arctic_station');
-      expect(prescriptionA.experienceArchetype).toBe('INVESTIGATION');
+      expect(prescriptionA.experienceArchetype).toBe('EVIDENCE');
       expect(prescriptionA.primaryActionPattern).toBe('EVALUATE_AND_INSPECT');
       expect(prescriptionA.ambiguityLevel).toBe('high');
 

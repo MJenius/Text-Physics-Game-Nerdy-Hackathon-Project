@@ -6,8 +6,10 @@ export interface ResourceAllocationItem {
   id: string;
   name: string;
   currentUnits: number;
-  minUnits: number;
+  minUnits: number; // Required minimum threshold
   maxUnits: number;
+  sliderMin?: number;
+  sliderMax?: number;
   unitLabel: string;
   description: string;
 }
@@ -116,23 +118,41 @@ export const ResourceManagementArchetype: React.FC<ResourceManagementArchetypePr
       <div className="space-y-4 mb-6">
         {resources.map((res) => {
           const currentVal = allocation[res.id] || 0;
+          const sMin = res.sliderMin ?? Math.min(10, res.minUnits);
+          const sMax = res.sliderMax ?? res.maxUnits;
+          const isBelowThreshold = currentVal < res.minUnits;
 
           return (
             <div
               key={res.id}
-              className="p-3.5 rounded-xl border border-stone-800 bg-stone-900/60 space-y-2"
+              className={`p-3.5 rounded-xl border transition-all ${
+                isBelowThreshold
+                  ? 'border-rose-900/50 bg-rose-950/10'
+                  : 'border-stone-800 bg-stone-900/60'
+              } space-y-2`}
             >
               <div className="flex items-center justify-between text-xs font-mono">
                 <span className="font-bold text-stone-200">{res.name}</span>
-                <span className="text-amber-300 font-bold">
-                  {currentVal} {res.unitLabel}
-                </span>
+                <div className="flex items-center gap-2">
+                  {isBelowThreshold ? (
+                    <span className="text-[10px] text-rose-400 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-800/60 font-semibold animate-pulse">
+                      Min Req: {res.minUnits} {res.unitLabel}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-emerald-400 bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-800/40 font-semibold">
+                      Req Met (≥{res.minUnits})
+                    </span>
+                  )}
+                  <span className={`font-bold ${isBelowThreshold ? 'text-rose-300' : 'text-amber-300'}`}>
+                    {currentVal} {res.unitLabel}
+                  </span>
+                </div>
               </div>
 
               <input
                 type="range"
-                min={res.minUnits}
-                max={res.maxUnits}
+                min={sMin}
+                max={sMax}
                 value={currentVal}
                 onChange={(e) => handleSliderChange(res.id, Number(e.target.value))}
                 disabled={disabled}

@@ -66,6 +66,7 @@ export class GameDirector {
 
     // 3. Experience Memory & Repetition Prevention
     const recentArchetypes = profile.experienceMemory?.archetypesExperienced || [];
+    const recentWorlds = profile.experienceMemory?.worldsExperienced || [];
     if (recentArchetypes.length >= 2) {
       const lastTwo = recentArchetypes.slice(-2);
       if (lastTwo[0] === archetype && lastTwo[1] === archetype) {
@@ -74,6 +75,18 @@ export class GameDirector {
           archetype = archetype === 'INVESTIGATION' ? 'EVIDENCE' : 'INVESTIGATION';
         } else if (targetSkill === 'sequencing') {
           archetype = archetype === 'TIMELINE' ? 'MECHANISM' : 'TIMELINE';
+        } else if (targetSkill === 'negativeConstraint') {
+          archetype = archetype === 'RESOURCE' ? 'ROUTE' : 'RESOURCE';
+        }
+      }
+    }
+    // 3b. World Repetition Prevention: If same world used 3+ times, rotate
+    if (recentWorlds.length >= 3) {
+      const lastThreeWorlds = recentWorlds.slice(-3);
+      if (lastThreeWorlds.every(w => w === world)) {
+        const alternates = VALIDATED_EXPERIENCE_DOMAINS.worlds.filter(w => w !== world);
+        if (alternates.length > 0) {
+          world = alternates[0];
         }
       }
     }
@@ -141,21 +154,47 @@ export class GameDirector {
     let prescribedSceneId: string | undefined = undefined;
     let documentTypes = ['emergency_log', 'witness_transcript', 'scientific_report'];
 
-    // 1. Check Misconception Probabilities and Error Patterns
+    // 1. Check Misconception Probabilities, Error Patterns, AND Behavioral Evidence
     const causalProb = misconceptions.sequence_causation_confusion?.probability ?? 0;
     const inversionProb = misconceptions.causal_inversion?.probability ?? 0;
     const temporalProb = misconceptions.temporal_reversal?.probability ?? 0;
     const negationProb = misconceptions.ignored_negation?.probability ?? 0;
+    const superficialProb = misconceptions.superficial_keyword_matching?.probability ?? 0;
 
-    if (lastError === 'causal_inversion' || lastError === 'sequence_causation_confusion' || causalProb >= 0.5 || inversionProb >= 0.5 || errors.causalInversions >= 1) {
+    // Behavioral evidence signals (beyond simple error counts)
+    const behavLog = profile.behavioralLog;
+    const hasHighRepeatGuesses = (behavLog?.repeatedGuesses ?? 0) >= 3;
+    const hasLowDocumentEngagement = (behavLog?.documentsOpened?.length ?? 0) < 2;
+    const hasEarlyCommitments = (behavLog?.earlyCommitments ?? 0) >= 2;
+    const hasRecoveryHistory = (behavLog?.recoveriesAfterFailure ?? 0) >= 1;
+    const weakEvidenceRatio = (behavLog?.luckyAnswerCounts?.correct_answer_weak_evidence ?? 0);
+
+    // Determine if surface-guessing should override based on behavioral pattern
+    const surfaceGuessBehavioral = hasHighRepeatGuesses && hasLowDocumentEngagement && weakEvidenceRatio >= 2;
+
+    if (surfaceGuessBehavioral || lastError === 'superficial_guessing' || superficialProb >= 0.6 || errors.superficialGuesses >= 2) {
+      // Surface guesser detection FIRST: behavioral pattern takes priority
+      targetSkill = 'literalRetrieval';
+      targetTopology = 'TOP-5';
+      experienceArchetype = 'SORT';
+      primaryActionPattern = 'FORENSIC_RETRIEVAL';
+      theme = 'arctic_station';
+      prescribedSceneId = 'arctic_act_3_stratigraphy';
+      scaffolding = hasRecoveryHistory ? 1 : 2;
+      ambiguityLevel = 'low';
+      consequenceIntensity = 'moderate';
+      documentTypes = ['incident_report', 'field_journal', 'scientific_report'];
+      headline = 'Director Calibration: Evidence Retrieval [Core Vault]';
+      insight = `High click frequency (${behavLog?.repeatedGuesses ?? 0} repeated guesses) with low document engagement. Presenting structured document cross-examination requiring explicit evidence citation.`;
+    } else if (lastError === 'causal_inversion' || lastError === 'sequence_causation_confusion' || causalProb >= 0.5 || inversionProb >= 0.5 || errors.causalInversions >= 1) {
       targetSkill = 'causeEffect';
       targetTopology = 'TOP-2';
-      experienceArchetype = 'INVESTIGATION';
+      experienceArchetype = hasEarlyCommitments ? 'EVIDENCE' : 'INVESTIGATION';
       primaryActionPattern = 'EVALUATE_AND_INSPECT';
       theme = 'arctic_station';
       prescribedSceneId = 'arctic_act_2_thermal';
       ambiguityLevel = 'high';
-      scaffolding = 1;
+      scaffolding = hasRecoveryHistory ? 0 : 1;
       consequenceIntensity = 'moderate';
       documentTypes = ['emergency_log', 'witness_transcript', 'scientific_report'];
       headline = 'Director Calibration: Causal Investigation [Arctic Boreas]';
@@ -178,25 +217,17 @@ export class GameDirector {
       targetTopology = 'TOP-3';
       experienceArchetype = 'RESOURCE';
       primaryActionPattern = 'ALLOCATE_UNDER_EXCLUSION';
-      theme = 'lost_observatory';
-      prescribedSceneId = 'act_3_junction';
+      // Alternate worlds for negation to avoid collapsing into single world
+      const negWorldHistory = profile.experienceMemory?.worldsExperienced || [];
+      const recentNegWorld = negWorldHistory[negWorldHistory.length - 1];
+      theme = recentNegWorld === 'lost_observatory' ? 'arctic_station' : 'lost_observatory';
+      prescribedSceneId = theme === 'lost_observatory' ? 'act_3_junction' : 'arctic_act_2_thermal';
       ambiguityLevel = 'moderate';
       scaffolding = 2;
       consequenceIntensity = 'severe';
       documentTypes = ['maintenance_manual', 'incident_report'];
-      headline = 'Director Calibration: Exclusion Constraints [Power Junction]';
+      headline = `Director Calibration: Exclusion Constraints [${theme === 'lost_observatory' ? 'Power Junction' : 'Arctic Thermal'}]`;
       insight = 'Safety warnings overlooked. Routing into high-stakes mutual exclusion allocation.';
-    } else if (lastError === 'superficial_guessing' || errors.superficialGuesses >= 2) {
-      targetSkill = 'literalRetrieval';
-      targetTopology = 'TOP-5';
-      experienceArchetype = 'SORT';
-      primaryActionPattern = 'FORENSIC_RETRIEVAL';
-      theme = 'arctic_station';
-      prescribedSceneId = 'arctic_act_3_stratigraphy';
-      scaffolding = 1;
-      ambiguityLevel = 'low';
-      headline = 'Director Calibration: Evidence Retrieval [Core Vault]';
-      insight = 'High click frequency without reading dwell. Presenting structured document cross-examination.';
     } else {
       // Transfer check
       const causeScore = skills.causeEffect ?? 0.5;

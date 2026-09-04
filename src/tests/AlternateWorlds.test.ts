@@ -161,4 +161,73 @@ describe('Alternate Worlds Mini-Experiences', () => {
       expect(useGameStore.getState().currentChallenge.synthesisConfig?.parameters).toHaveLength(3);
     });
   });
+
+  describe('Aether-9 Orbital Observatory (Space Coronagraph)', () => {
+    it('initializes world cleanly into Orbital Act 1 Coronagraph', () => {
+      useGameStore.getState().setWorld('orbital_habitat');
+      const state = useGameStore.getState();
+
+      expect(state.narrative.activeWorldId).toBe('orbital_habitat');
+      expect(state.currentChallengeId).toBe('orbital_act_1_coronagraph');
+      expect(state.currentChallenge.title).toContain('Solar Coronagraph');
+      expect(state.entities['polarizer_filter_gimbal']).toBeDefined();
+    });
+
+    it('enforces polarization calibration angle of 48 degrees', () => {
+      useGameStore.getState().setWorld('orbital_habitat');
+
+      // Attempting to activate at wrong angle fails
+      useGameStore.getState().executeAction({
+        type: 'ACTIVATE',
+        targetId: 'polarizer_filter_gimbal'
+      });
+      let state = useGameStore.getState();
+      expect(state.lastFeedback?.type).toBe('failure');
+
+      // Calibrate to 48 degrees
+      useGameStore.setState((draft) => {
+        draft.entities['polarizer_filter_gimbal'].states.angleDeg = 48;
+      });
+      useGameStore.getState().executeAction({
+        type: 'ACTIVATE',
+        targetId: 'polarizer_filter_gimbal'
+      });
+
+      state = useGameStore.getState();
+      expect(state.entities['polarizer_filter_gimbal'].states.isCalibrated).toBe(true);
+      expect(state.flags['orbital_coronagraph_aligned']).toBe(true);
+    });
+  });
+
+  describe('Dynamic World Switching & Transfer Mode Exit', () => {
+    it('exits transfer mode cleanly when switching worlds', () => {
+      // Enter Hero Transfer Mode
+      useGameStore.getState().loadHeroTransferScenario();
+      expect(useGameStore.getState().isTransferModeActive).toBe(true);
+
+      // Switch to Arctic Station
+      useGameStore.getState().setWorld('arctic_station');
+      const state = useGameStore.getState();
+
+      expect(state.isTransferModeActive).toBe(false);
+      expect(state.narrative.activeWorldId).toBe('arctic_station');
+      expect(state.currentChallengeId).toBe('arctic_act_1_airlock');
+    });
+
+    it('switches cleanly between all 4 worlds in sequence', () => {
+      const worlds: Array<import('../worlds/worldTypes').WorldId> = [
+        'lost_observatory',
+        'arctic_station',
+        'triton_deep_sea',
+        'orbital_habitat'
+      ];
+
+      for (const worldId of worlds) {
+        useGameStore.getState().setWorld(worldId);
+        const state = useGameStore.getState();
+        expect(state.narrative.activeWorldId).toBe(worldId);
+        expect(state.currentChallengeId).toBeDefined();
+      }
+    });
+  });
 });

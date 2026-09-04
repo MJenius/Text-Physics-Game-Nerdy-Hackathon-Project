@@ -29,11 +29,26 @@ export const ReadingPanel: React.FC = () => {
     failedAttempts,
     isPassageGenerating,
     isTransferModeActive,
-    openNotebook
+    openNotebook,
+    narrative
   } = useGameStore();
 
   const { profile } = useLearnerStore();
   const [selectedDocIndex, setSelectedDocIndex] = useState<number>(0);
+
+  // Cleanly reset to first document whenever scene changes
+  React.useEffect(() => {
+    setSelectedDocIndex(0);
+  }, [currentChallenge.id]);
+
+  const totalActs =
+    narrative.activeWorldId === 'arctic_station'
+      ? 4
+      : narrative.activeWorldId === 'triton_deep_sea'
+      ? 3
+      : narrative.activeWorldId === 'orbital_habitat'
+      ? 1
+      : 7;
 
   const documents = currentChallenge.passage.documents || [];
   const hasMultipleDocs = documents.length > 1;
@@ -87,7 +102,7 @@ export const ReadingPanel: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-stone-950/90 border-r border-stone-800 p-6 backdrop-blur-md shadow-2xl overflow-y-auto select-none font-serif">
+    <div className="flex flex-col h-full bg-stone-950/90 border-r border-stone-800 p-6 backdrop-blur-md shadow-2xl overflow-y-auto select-text font-serif">
       {/* Top Header */}
       <div className="flex items-center justify-between pb-4 mb-4 border-b border-stone-800/80 shrink-0">
         <div className="flex items-center gap-2.5 text-amber-400">
@@ -127,7 +142,7 @@ export const ReadingPanel: React.FC = () => {
               ? 'bg-cyan-950/70 text-cyan-300 border border-cyan-700/60 animate-pulse'
               : 'bg-amber-950/60 text-amber-300 border border-amber-800/60'
           }`}>
-            {isTransferModeActive ? 'Hero Transfer' : `Act ${currentAct} of 7`}
+            {isTransferModeActive ? 'Hero Transfer' : `Act ${currentAct} of ${totalActs}`}
           </span>
         </div>
       </div>

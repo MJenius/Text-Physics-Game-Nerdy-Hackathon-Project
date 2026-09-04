@@ -709,17 +709,100 @@ export const StageViewport: React.FC = () => {
           unitLabel="kW"
           instructionSnippet="Allocate the 85 kW diesel thermal budget. Pre-Heater needs min 25 kW, Cryostat min 30 kW, Quarters min 30 kW."
           resources={[
-            { id: 'preheater', name: 'Diesel Fuel Pre-Heater', currentUnits: 25, minUnits: 25, maxUnits: 40, unitLabel: 'kW', description: 'Below 25 kW, paraffin wax crystallizes.' },
-            { id: 'cryostat', name: 'Core Cryostat Cooler', currentUnits: 30, minUnits: 30, maxUnits: 45, unitLabel: 'kW', description: 'Below 30 kW, prehistoric ice cores melt.' },
-            { id: 'quarters', name: 'Crew Living Quarters', currentUnits: 30, minUnits: 30, maxUnits: 45, unitLabel: 'kW', description: 'Below 30 kW, hypothermia risk surges.' }
-          ]}
-          onCommitAllocation={(_allocations, isValid) => {
-            if (isValid) {
-              useGameStore.setState((draft) => {
-                draft.flags['arctic_thermal_balanced'] = true;
-                draft.isComplete = true;
-              });
+            {
+              id: 'preheater',
+              name: 'Diesel Fuel Pre-Heater',
+              currentUnits: 45,
+              minUnits: 25,
+              maxUnits: 55,
+              sliderMin: 10,
+              sliderMax: 55,
+              unitLabel: 'kW',
+              description: 'Operational minimum: 25 kW (prevents paraffin wax crystallization in fuel pump).'
+            },
+            {
+              id: 'cryostat',
+              name: 'Core Cryostat Cooler',
+              currentUnits: 20,
+              minUnits: 30,
+              maxUnits: 55,
+              sliderMin: 10,
+              sliderMax: 55,
+              unitLabel: 'kW',
+              description: 'Operational minimum: 30 kW (prevents melting of 10,000-year prehistoric ice cores).'
+            },
+            {
+              id: 'quarters',
+              name: 'Crew Living Quarters',
+              currentUnits: 20,
+              minUnits: 30,
+              maxUnits: 55,
+              sliderMin: 10,
+              sliderMax: 55,
+              unitLabel: 'kW',
+              description: 'Operational minimum: 30 kW (maintains +18°C livable temperature for station crew).'
             }
+          ]}
+          onCommitAllocation={(allocations, _isBalanced, overBudget) => {
+            const pre = allocations['preheater'] ?? 0;
+            const cryo = allocations['cryostat'] ?? 0;
+            const qtr = allocations['quarters'] ?? 0;
+            const total = pre + cryo + qtr;
+
+            if (overBudget || total > 85) {
+              useGameStore.setState((draft) => {
+                draft.lastFeedback = {
+                  type: 'failure',
+                  message: `Generator overloaded! Total load is ${total} kW, exceeding the 85 kW continuous ceiling.`,
+                  timestamp: Date.now()
+                };
+              });
+              return;
+            }
+
+            if (pre < 25) {
+              useGameStore.setState((draft) => {
+                draft.lastFeedback = {
+                  type: 'failure',
+                  message: `Pre-Heater under-allocated (${pre} kW < 25 kW)! Paraffin wax crystals will choke the fuel pump.`,
+                  timestamp: Date.now()
+                };
+              });
+              return;
+            }
+
+            if (cryo < 30) {
+              useGameStore.setState((draft) => {
+                draft.lastFeedback = {
+                  type: 'failure',
+                  message: `Cryostat under-allocated (${cryo} kW < 30 kW)! Prehistoric ice core samples will melt.`,
+                  timestamp: Date.now()
+                };
+              });
+              return;
+            }
+
+            if (qtr < 30) {
+              useGameStore.setState((draft) => {
+                draft.lastFeedback = {
+                  type: 'failure',
+                  message: `Living Quarters under-allocated (${qtr} kW < 30 kW)! Crew quarters will freeze.`,
+                  timestamp: Date.now()
+                };
+              });
+              return;
+            }
+
+            // All operational constraints satisfied (25 + 30 + 30 = 85 kW)
+            useGameStore.setState((draft) => {
+              draft.flags['arctic_thermal_balanced'] = true;
+              draft.isComplete = true;
+              draft.lastFeedback = {
+                type: 'success',
+                message: '★ THERMAL SIPHON BALANCED! Generator running at optimal 85 kW envelope. All circuits stable.',
+                timestamp: Date.now()
+              };
+            });
           }}
         />
         {Boolean(useGameStore.getState().flags['arctic_thermal_balanced']) && renderDecisionCards()}
@@ -790,6 +873,61 @@ export const StageViewport: React.FC = () => {
   };
 
   // ──────────────────────────────────────────────────────────────────────────
+  // ORBITAL ACT I: SOLAR CORONAGRAPH (Calibration Archetype)
+  // ──────────────────────────────────────────────────────────────────────────
+  const renderOrbitalCoronagraph = () => {
+    const isCalibrated = Boolean(entities['polarizer_filter_gimbal']?.states?.isCalibrated);
+
+    return (
+      <div className="w-full max-w-xl flex flex-col items-center font-serif">
+        <div className="relative w-full rounded-2xl border-4 border-blue-900 bg-[#05070d] p-6 shadow-2xl overflow-hidden mb-4">
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-950 border border-blue-500 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-blue-300 uppercase shadow">
+            Aether-9 Orbital Observatory • Sun-Earth L1 Lagrange
+          </div>
+          <div className="text-xs font-mono text-stone-300 mb-3 flex items-center justify-between border-b border-blue-900/50 pb-2">
+            <div>
+              <span className="text-blue-400 font-bold">SOLAR FLARE FLUX:</span> 10,200 cps (X-Class Surge)
+            </div>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+              isCalibrated ? 'bg-emerald-950 text-emerald-300 border border-emerald-500' : 'bg-rose-950 text-rose-300 border border-rose-500 animate-pulse'
+            }`}>
+              {isCalibrated ? 'POLARIZATION LOCKED' : 'SENSORS EXPOSED'}
+            </span>
+          </div>
+
+          <CalibrateArchetype
+            title="Coronagraph Quartz Polarizer Calibration"
+            variableName="Polarization Angle"
+            unit="deg"
+            initialValue={0}
+            minValue={0}
+            maxValue={90}
+            step={1}
+            targetValue={48}
+            tolerance={2}
+            instructionSnippet="Rotate the quartz polarizing filter to 48° (±2°) to absorb coronal plasma flare flux."
+            onCommit={(val, isAccurate) => {
+              if (isAccurate) {
+                useGameStore.setState((draft) => {
+                  if (draft.entities['polarizer_filter_gimbal']?.states) {
+                    draft.entities['polarizer_filter_gimbal'].states.angleDeg = val;
+                    draft.entities['polarizer_filter_gimbal'].states.isCalibrated = true;
+                  }
+                  draft.flags['orbital_coronagraph_aligned'] = true;
+                  draft.isComplete = true;
+                });
+                handleTargetClick('polarizer_filter_gimbal');
+              } else {
+                handleTargetClick('polarizer_filter_gimbal');
+              }
+            }}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
   // DYNAMIC ARCHETYPE ROUTER (Full 12-Archetype Engine)
   // ──────────────────────────────────────────────────────────────────────────
   const renderActiveScene = () => {
@@ -797,6 +935,7 @@ export const StageViewport: React.FC = () => {
     if (currentChallenge.id === 'arctic_act_1_airlock') return renderArcticAirlock();
     if (currentChallenge.id === 'arctic_act_2_thermal') return renderArcticThermal();
     if (currentChallenge.id === 'triton_act_1_vapor') return renderTritonVapor();
+    if (currentChallenge.id === 'orbital_act_1_coronagraph') return renderOrbitalCoronagraph();
 
     // 2. Generic Archetype Route Handlers:
     if (currentChallenge.archetype === 'EVIDENCE' && currentChallenge.evidenceConfig) {
@@ -896,14 +1035,17 @@ export const StageViewport: React.FC = () => {
             title={currentChallenge.title}
             totalBudgetUnits={100}
             unitLabel="kW"
-            instructionSnippet="Balance resource demands to remain within the operational envelope."
+            instructionSnippet="Balance resource demands to remain within the operational envelope. Channel 1 min 40 kW, Channel 2 min 30 kW, Channel 3 min 30 kW."
             resources={[
-              { id: 'ch1', name: 'Primary Channel', currentUnits: 40, minUnits: 20, maxUnits: 60, unitLabel: 'kW', description: 'Essential baseline load' },
-              { id: 'ch2', name: 'Secondary Channel', currentUnits: 30, minUnits: 20, maxUnits: 50, unitLabel: 'kW', description: 'Backup reserve circuit' },
-              { id: 'ch3', name: 'Auxiliary Channel', currentUnits: 30, minUnits: 10, maxUnits: 40, unitLabel: 'kW', description: 'Non-critical buffer bus' }
+              { id: 'ch1', name: 'Primary Channel', currentUnits: 55, minUnits: 40, maxUnits: 70, sliderMin: 10, sliderMax: 70, unitLabel: 'kW', description: 'Essential baseline load (min 40 kW)' },
+              { id: 'ch2', name: 'Secondary Channel', currentUnits: 20, minUnits: 30, maxUnits: 60, sliderMin: 10, sliderMax: 60, unitLabel: 'kW', description: 'Backup reserve circuit (min 30 kW)' },
+              { id: 'ch3', name: 'Auxiliary Channel', currentUnits: 20, minUnits: 30, maxUnits: 50, sliderMin: 10, sliderMax: 50, unitLabel: 'kW', description: 'Non-critical buffer bus (min 30 kW)' }
             ]}
-            onCommitAllocation={(_alloc, isValid) => {
-              if (isValid) {
+            onCommitAllocation={(alloc, _isValid, overBudget) => {
+              const ch1 = alloc['ch1'] ?? 0;
+              const ch2 = alloc['ch2'] ?? 0;
+              const ch3 = alloc['ch3'] ?? 0;
+              if (!overBudget && ch1 >= 40 && ch2 >= 30 && ch3 >= 30) {
                 useGameStore.setState((draft) => {
                   draft.isComplete = true;
                 });
@@ -1001,7 +1143,7 @@ export const StageViewport: React.FC = () => {
   };
 
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center p-2">
+    <div className="w-full flex flex-col items-center justify-start my-auto p-2">
       {renderPhysicalConsequence()}
       {renderActiveScene()}
     </div>

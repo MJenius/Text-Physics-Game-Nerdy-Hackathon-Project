@@ -98,7 +98,27 @@ export class ScenarioCompiler {
     });
     if (!hasRequiredFields) errors.push('Schema validation failed: missing required fields');
 
-    // 2. Entity Validation (Guardrail: only registered or structurally valid entities)
+    // 2. World Compatibility
+    const validWorlds = ['lost_observatory', 'arctic_station', 'triton_deep_sea', 'orbital_habitat'];
+    const worldValid = validWorlds.includes(spec.world);
+    checks.push({
+      step: 'schema_validation',
+      passed: worldValid,
+      message: worldValid ? `World '${spec.world}' registered` : `World '${spec.world}' not in validated registry`,
+    });
+    if (!worldValid) errors.push(`World compatibility failed: '${spec.world}' is not a registered world`);
+
+    // 3. Archetype Compatibility
+    const validArchetypes = ['NAVIGATION', 'MECHANISM', 'TIMELINE', 'INVESTIGATION', 'EVIDENCE', 'ROUTE', 'RESOURCE', 'SORT', 'CALIBRATE', 'REPAIR', 'DIALOGUE', 'SYNTHESIS'];
+    const archetypeValid = validArchetypes.includes(spec.archetype);
+    checks.push({
+      step: 'schema_validation',
+      passed: archetypeValid,
+      message: archetypeValid ? `Archetype '${spec.archetype}' registered` : `Archetype '${spec.archetype}' not in validated registry`,
+    });
+    if (!archetypeValid) errors.push(`Archetype compatibility failed: '${spec.archetype}' is not a registered archetype`);
+
+    // 4. Entity Validation (Guardrail: only registered or structurally valid entities)
     let entitiesValid = true;
     const ruleEntityTargets = new Set(rules.map((r) => r.targetId));
     for (const targetId of ruleEntityTargets) {
@@ -113,7 +133,7 @@ export class ScenarioCompiler {
       message: entitiesValid ? 'All rule entities exist in world dictionary' : 'Unregistered entity referenced',
     });
 
-    // 3. Fact Validation
+    // 5. Fact Validation
     const factsValid = Array.isArray(spec.requiredFacts) && spec.requiredFacts.length > 0;
     checks.push({
       step: 'fact_validation',
@@ -122,7 +142,7 @@ export class ScenarioCompiler {
     });
     if (!factsValid) errors.push('Fact validation failed: required facts list empty');
 
-    // 4. Relation Validation (Graph consistency)
+    // 6. Relation Validation (Graph consistency)
     let relationsConsistent = true;
     const factIds = new Set((spec.requiredFacts || []).map((f) => f.id));
     for (const rel of spec.requiredRelations || []) {
@@ -137,7 +157,7 @@ export class ScenarioCompiler {
       message: relationsConsistent ? 'Knowledge relations graph internally consistent' : 'Dangling relation node',
     });
 
-    // 5. Document Coverage
+    // 7. Document Coverage
     const coveredFactIds = new Set<string>();
     for (const doc of spec.documents || []) {
       for (const fid of doc.factsCovered || []) {
@@ -157,7 +177,7 @@ export class ScenarioCompiler {
       message: allFactsCovered ? 'All facts have source document snippets' : 'Uncovered facts in scenario',
     });
 
-    // 6. Action Legality
+    // 8. Action Legality
     const legalActions = new Set(['ACTIVATE', 'PUSH', 'TURN', 'PULL', 'USE_ITEM_ON', 'CALIBRATE', 'PICKUP', 'INSPECT', 'EVALUATE_EVIDENCE']);
     let actionsLegal = true;
     for (const rule of rules) {
@@ -172,7 +192,7 @@ export class ScenarioCompiler {
       message: actionsLegal ? 'All actions belong to legal engine vocabulary' : 'Unrecognized player action',
     });
 
-    // 7 & 8. State Transition Simulation & Reachability DAG Search
+    // 9 & 10. State Transition Simulation & Reachability DAG Search
     const reachability = this.searchReachabilityPath(registeredEntities, rules, completionConditions);
     checks.push({
       step: 'state_transition_simulation',
@@ -188,7 +208,7 @@ export class ScenarioCompiler {
       errors.push('Reachability check failed: No valid sequence of actions satisfies completion conditions');
     }
 
-    // 9. Failure Recovery Validation (ensures failure rules don't corrupt game into unrecoverable dead-end)
+    // 11. Failure Recovery Validation (ensures failure rules don't corrupt game into unrecoverable dead-end)
     const recoverySafe = this.verifyFailureRecovery(registeredEntities, rules);
     checks.push({
       step: 'failure_recovery_validation',
@@ -197,7 +217,7 @@ export class ScenarioCompiler {
     });
     if (!recoverySafe) errors.push('Recovery validation failed: player action locks game permanently without reset');
 
-    // 10. Evidence Alignment
+    // 12. Evidence Alignment
     const evidenceAligned = Boolean(spec.evidenceSnippet && spec.evidenceSnippet.trim().length > 3);
     checks.push({
       step: 'evidence_alignment',
@@ -206,7 +226,7 @@ export class ScenarioCompiler {
     });
     if (!evidenceAligned) errors.push('Evidence alignment failed: target claim missing snippet');
 
-    // 11. Answer Leakage Checks
+    // 13. Answer Leakage Checks
     const leakageCheck = this.detectAnswerLeakage(spec, rules);
     checks.push({
       step: 'answer_leakage_checks',
@@ -216,6 +236,15 @@ export class ScenarioCompiler {
     if (leakageCheck.hasLeakage) {
       errors.push(...leakageCheck.reasons);
     }
+
+    // 14. Completion Conditions Check
+    const hasCompletionConditions = completionConditions && completionConditions.length > 0;
+    checks.push({
+      step: 'evidence_alignment', // reusing closest step type
+      passed: hasCompletionConditions,
+      message: hasCompletionConditions ? `${completionConditions.length} completion conditions defined` : 'No completion conditions defined',
+    });
+    if (!hasCompletionConditions) errors.push('Completion conditions check failed: scenario has no victory conditions');
 
     const isValid = errors.length === 0;
     return {
@@ -440,5 +469,89 @@ export class ScenarioCompiler {
   static validateReachability(scenario: ScenarioSpecification): boolean {
     const result = this.searchReachabilityPath(scenario.entities, scenario.rules, scenario.completionConditions);
     return result.reachable;
+  }
+
+  /**
+   * Runs a compiler benchmark across sample scenarios.
+   * Returns empirical pass/fail stats, rejection reasons, and latencies.
+   */
+  static runCompilerBenchmark(
+    samples: Array<{
+      spec: AIScenarioSpecification;
+      entities: Record<string, import('../types/game').Entity>;
+      rules: import('../types/game').GameRule[];
+      completionConditions: import('../types/game').Predicate[];
+    }>
+  ): {
+    totalSamples: number;
+    passed: number;
+    failed: number;
+    rejectionRate: number;
+    reachabilityRate: number;
+    leakageDetected: number;
+    avgLatencyMs: number;
+    perSample: Array<{
+      index: number;
+      valid: boolean;
+      latencyMs: number;
+      errors: string[];
+      checksCount: number;
+      winningPathLength: number;
+    }>;
+  } {
+    const results: Array<{
+      index: number;
+      valid: boolean;
+      latencyMs: number;
+      errors: string[];
+      checksCount: number;
+      winningPathLength: number;
+    }> = [];
+
+    let totalPassed = 0;
+    let totalFailed = 0;
+    let reachable = 0;
+    let leakageDetected = 0;
+    let totalLatency = 0;
+
+    for (let i = 0; i < samples.length; i++) {
+      const sample = samples[i];
+      const start = performance.now();
+      const report = this.validateAIScenario(sample.spec, sample.entities, sample.rules, sample.completionConditions);
+      const latency = performance.now() - start;
+
+      totalLatency += latency;
+      if (report.valid) {
+        totalPassed++;
+      } else {
+        totalFailed++;
+      }
+
+      const reachCheck = report.checks.find(c => c.step === 'reachability_search');
+      if (reachCheck?.passed) reachable++;
+
+      const leakCheck = report.checks.find(c => c.step === 'answer_leakage_checks');
+      if (leakCheck && !leakCheck.passed) leakageDetected++;
+
+      results.push({
+        index: i,
+        valid: report.valid,
+        latencyMs: Math.round(latency * 100) / 100,
+        errors: report.errors,
+        checksCount: report.checks.length,
+        winningPathLength: report.winningPath?.length || 0,
+      });
+    }
+
+    return {
+      totalSamples: samples.length,
+      passed: totalPassed,
+      failed: totalFailed,
+      rejectionRate: samples.length > 0 ? totalFailed / samples.length : 0,
+      reachabilityRate: samples.length > 0 ? reachable / samples.length : 0,
+      leakageDetected,
+      avgLatencyMs: samples.length > 0 ? Math.round((totalLatency / samples.length) * 100) / 100 : 0,
+      perSample: results,
+    };
   }
 }
