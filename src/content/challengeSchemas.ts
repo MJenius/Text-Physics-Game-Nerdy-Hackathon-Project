@@ -281,6 +281,126 @@ export const heroTritonSchema: ChallengeSchema = {
   ],
 };
 
+export const act1Schema: ChallengeSchema = {
+  challengeId: 'act_1_vestibule',
+  skill: 'sequencing',
+  requiredEntities: ['iron_lock', 'brass_latch', 'archive_door'],
+  requiredRelationships: ['Disengage brass latch before iron lock'],
+  solutionSteps: ['Disengage upper brass latch', 'Unlock iron deadbolt with master key', 'Push oak portal open'],
+  evidenceSentences: [
+    {
+      failureCondition: 'wrong_order',
+      paragraphIndex: 2,
+      evidencePhrase: 'FIRST disengage the upper brass latch by hand. THEN insert the iron master key into the lower deadbolt.',
+      hintLevels: [
+        'The surveyor journal states which catch must be released first.',
+        'Read paragraph 3 about disengaging the upper brass latch before the deadbolt.',
+        'Release the upper brass latch by hand before turning the iron key.'
+      ]
+    }
+  ]
+};
+
+export const act2Schema: ChallengeSchema = {
+  challengeId: 'act_2_clock',
+  skill: 'causeEffect',
+  requiredEntities: ['deadbeat_escapement', 'pendulum_clutch'],
+  requiredRelationships: ['Elevation reduces pendulum rate by 2 BPM to 58 BPM'],
+  solutionSteps: ['Calibrate escapement rate to 58 BPM', 'Engage pendulum drive clutch'],
+  evidenceSentences: [
+    {
+      failureCondition: 'wrong_calibration',
+      paragraphIndex: 2,
+      evidencePhrase: 'reduced gravitational acceleration requires the bob weight to be lowered by exactly 2 beats per minute, setting the true sidereal rate to precisely 58 BPM',
+      hintLevels: [
+        'Examine the horological ledger for the elevation rate at 2,840 meters.',
+        'Reduced gravitational acceleration requires lowering the rate by 2 BPM from 60 BPM.',
+        'The true sidereal rate is precisely 58 BPM.'
+      ]
+    }
+  ]
+};
+
+export const act3Schema: ChallengeSchema = {
+  challengeId: 'act_3_junction',
+  skill: 'negativeConstraint',
+  requiredEntities: ['archive_power_switch', 'hydraulic_power_switch'],
+  requiredRelationships: ['Dynamo reserve load ceiling is 100 kW; Archive 80 kW + Hydraulic 80 kW = 160 kW overload'],
+  solutionSteps: ['Activate Archive OR Laboratory power switch exclusively'],
+  evidenceSentences: [
+    {
+      failureCondition: 'overload',
+      paragraphIndex: 2,
+      evidencePhrase: 'Engaging both the Archive and Hydraulic switches simultaneously draws 160 kW, which INSTANTLY TRIPS the magnetic master breaker with an explosive arc.',
+      hintLevels: [
+        'Check the maximum load ceiling on auxiliary coal reserves.',
+        'Engaging both switches draws 160 kW, exceeding the 100 kW ceiling.',
+        'Engaging both switches draws 160 kW and trips the master breaker.'
+      ]
+    }
+  ]
+};
+
+export const act4Schema: ChallengeSchema = {
+  challengeId: 'act_4_navigation',
+  skill: 'synthesis',
+  requiredEntities: ['intercom_pipe'],
+  requiredRelationships: ['Bedrock seismic tremors shifted the telescope pier by 3 arcseconds'],
+  solutionSteps: ['Synthesize conflicting logs from Sterling and Aris'],
+  evidenceSentences: [
+    {
+      failureCondition: 'uninformed_dialogue',
+      paragraphIndex: 1,
+      evidencePhrase: 'lunar perigee triggered deep micro-seismic tremors in Mount Caelum’s granite core',
+      hintLevels: [
+        'Read Machinist Aris\'s incident log carefully.',
+        'Look for the geological reason Aris gave for the pier shift.',
+        'Bedrock micro-seismic tremors shifted the telescope pier.'
+      ]
+    }
+  ]
+};
+
+export const act5Schema: ChallengeSchema = {
+  challengeId: 'act_5_adaptive',
+  skill: 'causeEffect',
+  requiredEntities: ['emergency_telemetry_terminal'],
+  requiredRelationships: ['Ceramic safety shunt is required to prevent arcing'],
+  solutionSteps: ['Install Ceramic Safety Shunt in Socket #1'],
+  evidenceSentences: [
+    {
+      failureCondition: 'wrong_component',
+      paragraphIndex: 3,
+      evidencePhrase: 'only a non-conductive ceramic casing will prevent high-voltage arcing',
+      hintLevels: [
+        'Read the warning about raw copper wire.',
+        'Look at what material prevents high-voltage arcing during dome rotation.',
+        'Only a ceramic casing prevents high-voltage arcing.'
+      ]
+    }
+  ]
+};
+
+export const act7Schema: ChallengeSchema = {
+  challengeId: 'act_7_dome',
+  skill: 'synthesis',
+  requiredEntities: ['azimuth_dial', 'shutter_lock_wheel', 'star_clock_sync_switch', 'quartz_receptacle', 'master_aperture_lever'],
+  requiredRelationships: ['Azimuth North, shutter dogs released, star clock synced, quartz prism seated'],
+  solutionSteps: ['Rotate azimuth to North', 'Release shutter dogs', 'Sync star clock', 'Insert quartz prism', 'Haul master aperture actuator'],
+  evidenceSentences: [
+    {
+      failureCondition: 'premature_actuation',
+      paragraphIndex: 4,
+      evidencePhrase: 'Only when all four conditions are fulfilled will pulling the Master Aperture Actuator open',
+      hintLevels: [
+        'Check the bronze plaque for the four transit prerequisites.',
+        'Look for the sentence describing when the Master Aperture Actuator may be pulled.',
+        'All four systems must be aligned before pulling the master lever.'
+      ]
+    }
+  ]
+};
+
 /** All schemas keyed by challenge ID */
 export const ALL_SCHEMAS: Record<string, ChallengeSchema> = {
   challenge_1: challenge1Schema,
@@ -290,4 +410,13 @@ export const ALL_SCHEMAS: Record<string, ChallengeSchema> = {
   challenge_5: challenge5Schema,
   challenge_6: challenge6Schema,
   hero_triton_transfer: heroTritonSchema,
+  act_1_vestibule: act1Schema,
+  act_2_clock: act2Schema,
+  act_2_archive: act2Schema,
+  act_2_hydraulics: act2Schema,
+  act_3_junction: act3Schema,
+  act_4_navigation: act4Schema,
+  act_5_adaptive: act5Schema,
+  act_7_dome: act7Schema,
 };
+

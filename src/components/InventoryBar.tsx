@@ -11,6 +11,15 @@ import {
 } from 'lucide-react';
 import type { EntityId } from '../types/game';
 
+const KNOWN_ITEM_NAMES: Record<string, string> = {
+  iron_key: 'Antique Wrought-Iron Key',
+  brass_key: 'Polished Brass Key',
+  oxidized_key: 'Oxidized Submersible Key',
+  cleaning_brush: 'Wire Cleaning Brush',
+  quartz_prism: '589nm Quartz Optical Prism',
+  replacement_shunt: 'Ceramic Safety Shunt'
+};
+
 export const InventoryBar: React.FC = () => {
   const { inventory, entities, selectedInventoryItem, selectInventoryItem } = useGameStore();
 
@@ -48,7 +57,7 @@ export const InventoryBar: React.FC = () => {
           <div className="flex items-center gap-2">
             {inventory.map((itemId) => {
               const item = entities[itemId];
-              if (!item) return null;
+              const itemName = item?.name || KNOWN_ITEM_NAMES[itemId] || itemId.replace(/_/g, ' ');
               const isSelected = selectedInventoryItem === itemId;
 
               return (
@@ -61,8 +70,8 @@ export const InventoryBar: React.FC = () => {
                       : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800 hover:border-slate-600'
                   }`}
                 >
-                  <span className="shrink-0">{getIcon(itemId, (item as any).icon)}</span>
-                  <span>{item.name}</span>
+                  <span className="shrink-0">{getIcon(itemId, (item as any)?.icon)}</span>
+                  <span>{itemName}</span>
                   {isSelected && (
                     <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0 ml-1" />
                   )}
@@ -75,7 +84,7 @@ export const InventoryBar: React.FC = () => {
 
       {selectedInventoryItem && (
         <div className="text-xs font-mono text-amber-300/90 animate-pulse">
-          Active tool: {entities[selectedInventoryItem]?.name} — Click a target in the chamber to apply.
+          Active tool: {entities[selectedInventoryItem]?.name || KNOWN_ITEM_NAMES[selectedInventoryItem] || selectedInventoryItem} — Click a target in the chamber to apply.
         </div>
       )}
     </div>

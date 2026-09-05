@@ -443,7 +443,7 @@ export const ACT2_CLOCK_SCENE: Challenge = {
     targetValue: 58,
     tolerance: 1,
     gaugeLabel: 'Escapement Cadence',
-    instructionSnippet: 'At 2,840 meters elevation, set pendulum rate to exactly 58 BPM.'
+    instructionSnippet: 'Adjust pendulum oscillation rate to compensate for Mount Caelum summit elevation based on the horological table.'
   },
   targetReadingSkill: 'cause_effect',
   ruleIds: ACT2_CLOCK_RULES.map((r) => r.id),
@@ -978,6 +978,17 @@ export const ACT7_ENTITIES: Record<string, Entity> = {
     isInInventory: false,
     allowedActions: ['ACTIVATE', 'INSPECT'],
     icon: 'Sliders'
+  },
+  quartz_prism: {
+    id: 'quartz_prism',
+    name: '589nm Quartz Optical Prism',
+    locationId: 'dome',
+    description: 'A flawless triangular prism of Brazilian quartz, cut for sodium D-line celestial refractometry.',
+    states: {},
+    isInteractable: true,
+    isInInventory: true,
+    allowedActions: ['USE_ITEM_ON', 'PICKUP', 'INSPECT'],
+    icon: 'Sparkles'
   }
 };
 
@@ -1113,7 +1124,7 @@ export const ACT7_RULES: GameRule[] = [
       soundEffect: 'chime',
       consequenceVisual: 'door_unlock'
     },
-    onFailure: { feedbackMessage: 'The dome is already opened to the stars.' }
+    onFailure: { feedbackMessage: 'The dome petals are already opened to the stars. Review telemetry or conclude your journey below.' }
   }
 ];
 

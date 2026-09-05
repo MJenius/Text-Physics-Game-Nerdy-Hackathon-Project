@@ -133,20 +133,9 @@ export const ResourceManagementArchetype: React.FC<ResourceManagementArchetypePr
             >
               <div className="flex items-center justify-between text-xs font-mono">
                 <span className="font-bold text-stone-200">{res.name}</span>
-                <div className="flex items-center gap-2">
-                  {isBelowThreshold ? (
-                    <span className="text-[10px] text-rose-400 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-800/60 font-semibold animate-pulse">
-                      Min Req: {res.minUnits} {res.unitLabel}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-emerald-400 bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-800/40 font-semibold">
-                      Req Met (≥{res.minUnits})
-                    </span>
-                  )}
-                  <span className={`font-bold ${isBelowThreshold ? 'text-rose-300' : 'text-amber-300'}`}>
-                    {currentVal} {res.unitLabel}
-                  </span>
-                </div>
+                <span className="font-bold text-stone-300">
+                  {currentVal} {res.unitLabel}
+                </span>
               </div>
 
               <input

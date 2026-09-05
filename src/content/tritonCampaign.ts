@@ -258,7 +258,7 @@ export const TRITON_SCENES: Record<string, Challenge> = {
     },
     synthesisConfig: {
       apparatusTitle: 'Abyssal Geothermal Core Scram Console',
-      instructionSnippet: 'Tune Primary Vent Pressure (340 PSI), Seawater Flow (85 L/min), and Scram Incline (45°) simultaneously.',
+      instructionSnippet: 'Harmonize Primary Vent Pressure, Seawater Flow, and Scram Incline according to the emergency envelope.',
       mutualExclusionWarning: 'Pressure deviation will flash superheated steam and rupture the titanium bulkhead.',
       parameters: [
         {

@@ -4,6 +4,7 @@ import type {
   WorldState,
   PlayerAction,
   EntityId,
+  Entity,
   Challenge,
   InteractionArchetype,
   NarrativeWorldState
@@ -35,6 +36,14 @@ import { ORBITAL_SCENES, ORBITAL_ENTITIES, ORBITAL_RULES } from '../content/orbi
 import { getWorldDefinition } from '../worlds/worldRegistry';
 import type { WorldId } from '../worlds/worldTypes';
 
+export interface EvidenceModalContext {
+  challengeId: string;
+  title: string;
+  targetSkill: string;
+  paragraphs: string[];
+  expectedSnippet: string;
+}
+
 interface GameStore extends WorldState {
   currentChallengeIndex: number;
   currentChallenge: Challenge;
@@ -49,6 +58,7 @@ interface GameStore extends WorldState {
   lastAction: PlayerAction | null;
   isPassageGenerating: boolean;
   isEvidenceModalOpen: boolean;
+  evidenceModalContext: EvidenceModalContext | null;
   isNotebookOpen: boolean;
   isTransferModeActive: boolean;
   returnSceneId: string;
@@ -63,13 +73,14 @@ interface GameStore extends WorldState {
   advanceToNextChallenge: () => void;
   restartFullGame: () => void;
   loadAdaptedPassage: () => Promise<void>;
-  openEvidenceModal: () => void;
+  openEvidenceModal: (customContext?: EvidenceModalContext) => void;
   closeEvidenceModal: () => void;
   openNotebook: () => void;
   closeNotebook: () => void;
   clearPhysicalConsequence: () => void;
   loadHeroTransferScenario: () => void;
   exitHeroTransferScenario: () => void;
+  loadCompiledAIScenario: (challenge: Challenge, entities?: Record<string, Entity>, worldId?: WorldId) => void;
   simulateWeaknessProfile: (weakness: 'causal_inversion' | 'temporal_reversal' | 'ignored_negation') => void;
   jumpToAct: (actNumber: number) => void;
   setWorld: (worldId: WorldId) => void;
@@ -208,6 +219,7 @@ export const useGameStore = create<GameStore>()(
       lastAction: null,
       isPassageGenerating: false,
       isEvidenceModalOpen: false,
+      evidenceModalContext: null,
       isNotebookOpen: false,
       isTransferModeActive: false,
       returnSceneId: 'act_1_vestibule',
@@ -231,10 +243,28 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
-      openEvidenceModal: () => {
-        set((state) => {
-          state.isEvidenceModalOpen = true;
-          TelemetryService.record('EVIDENCE_REQUESTED', state.currentChallengeId);
+      openEvidenceModal: (customContext?: EvidenceModalContext) => {
+        const state = get();
+        const currentChallenge = state.currentChallenge;
+        const schema = ALL_SCHEMAS[currentChallenge.id];
+        const adapted = currentChallenge.adaptedPassage;
+        const defaultParagraphs = adapted?.paragraphs || currentChallenge.passage?.paragraphs || [];
+        const defaultSnippet = state.isTransferModeActive
+          ? TRITON_TRANSFER_SCENARIO.evidenceSnippet
+          : schema?.evidenceSentences[0]?.evidencePhrase || 'before';
+
+        const contextToUse = customContext || {
+          challengeId: currentChallenge.id,
+          title: currentChallenge.title,
+          targetSkill: currentChallenge.targetReadingSkill || 'literalRetrieval',
+          paragraphs: defaultParagraphs,
+          expectedSnippet: defaultSnippet
+        };
+
+        set((draft) => {
+          draft.evidenceModalContext = contextToUse;
+          draft.isEvidenceModalOpen = true;
+          TelemetryService.record('EVIDENCE_REQUESTED', contextToUse.challengeId);
         });
       },
 
@@ -439,6 +469,25 @@ export const useGameStore = create<GameStore>()(
           return;
         }
 
+        // Snapshot completed scene evidence attribution context BEFORE any scene transition!
+        const schema = ALL_SCHEMAS[currentScene.id];
+        const adapted = currentScene.adaptedPassage;
+        const paragraphs = adapted?.paragraphs || currentScene.passage?.paragraphs || [];
+        const expectedSnippet = state.isTransferModeActive
+          ? TRITON_TRANSFER_SCENARIO.evidenceSnippet
+          : schema?.evidenceSentences[0]?.evidencePhrase || 'before';
+
+        const completedSceneContext: EvidenceModalContext = {
+          challengeId: currentScene.id,
+          title: currentScene.title,
+          targetSkill: currentScene.targetReadingSkill || 'literalRetrieval',
+          paragraphs,
+          expectedSnippet
+        };
+
+        // Determine if this completion warrants an evidence check (e.g., Act 2, Act 4, Act 6 or any scene completed)
+        const shouldTriggerEvidenceCheck = currentScene.act === 2 || currentScene.act === 4 || currentScene.act === 6 || currentScene.id === 'act_2_clock' || currentScene.id === 'act_4_navigation' || currentScene.id === 'arctic_act_2_thermal' || currentScene.id === 'triton_act_2_cavitation';
+
         // ── AI DIRECTOR PRESCRIBED SCENE ROUTING ──────────────────────
         // If the Director has an active prescription with a specific scene,
         // route the learner there instead of following hardcoded progression.
@@ -460,6 +509,9 @@ export const useGameStore = create<GameStore>()(
               reason: directorDiag.recommendedIntervention,
             });
             get().transitionToScene(prescribedId);
+            if (shouldTriggerEvidenceCheck) {
+              get().openEvidenceModal(completedSceneContext);
+            }
             return;
           }
         }
@@ -470,6 +522,7 @@ export const useGameStore = create<GameStore>()(
           return;
         } else if (currentScene.id === 'arctic_act_2_thermal') {
           get().transitionToScene('arctic_act_3_stratigraphy');
+          if (shouldTriggerEvidenceCheck) get().openEvidenceModal(completedSceneContext);
           return;
         } else if (currentScene.id === 'arctic_act_3_stratigraphy') {
           get().transitionToScene('arctic_act_4_radio');
@@ -482,6 +535,7 @@ export const useGameStore = create<GameStore>()(
           return;
         } else if (currentScene.id === 'triton_act_2_cavitation') {
           get().transitionToScene('triton_act_3_scram');
+          if (shouldTriggerEvidenceCheck) get().openEvidenceModal(completedSceneContext);
           return;
         }
 
@@ -504,6 +558,10 @@ export const useGameStore = create<GameStore>()(
         }
 
         get().transitionToScene(nextSceneId);
+
+        if (shouldTriggerEvidenceCheck) {
+          get().openEvidenceModal(completedSceneContext);
+        }
       },
 
       resetCurrentChallenge: () => {
@@ -583,6 +641,35 @@ export const useGameStore = create<GameStore>()(
           draft.isTransferModeActive = false;
         });
         get().transitionToScene(returnId);
+      },
+
+      loadCompiledAIScenario: (challenge: Challenge, entities?: Record<string, Entity>, worldId?: WorldId) => {
+        const targetWorld = worldId || 'arctic_station';
+        set((state) => {
+          state.returnSceneId = state.currentChallengeId;
+          state.isTransferModeActive = false;
+          state.currentChallengeId = challenge.id;
+          state.currentChallenge = challenge;
+          state.activeArchetype = challenge.archetype || 'INVESTIGATION';
+          state.currentLocationId = challenge.locationId;
+          state.currentAct = challenge.act || 1;
+          state.entities = entities ? JSON.parse(JSON.stringify(entities)) : getSceneEntities(challenge.id);
+          state.flags = {};
+          state.isComplete = false;
+          state.selectedInventoryItem = null;
+          state.physicalConsequence = undefined;
+          state.narrative.activeWorldId = targetWorld;
+          state.lastFeedback = {
+            type: 'info',
+            message: `AI Scenario Active: ${challenge.title}. Examine the documents to infer physical system laws.`,
+            timestamp: Date.now()
+          };
+          state.readingDwellStartTime = Date.now();
+          TelemetryService.record('AI_COMPILED_SCENARIO_LOADED', challenge.id, {
+            world: targetWorld,
+            archetype: challenge.archetype,
+          });
+        });
       },
 
       simulateWeaknessProfile: (weakness: 'causal_inversion' | 'temporal_reversal' | 'ignored_negation') => {

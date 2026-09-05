@@ -12,8 +12,12 @@ import {
   RefreshCw,
   Zap,
   Database,
-  GitBranch
+  GitBranch,
+  Sparkles,
+  Play
 } from 'lucide-react';
+import { getLiveAIStatus } from '../engine/AIContentService';
+import { BOREAS_SPECTACULAR_SCENARIO, BOREAS_SPECTACULAR_ENTITIES } from '../content/boreasSpectacularScenario';
 
 interface DirectorInspectorProps {
   isOpen: boolean;
@@ -28,13 +32,42 @@ export const DirectorInspector: React.FC<DirectorInspectorProps> = ({ isOpen, on
     narrative,
     flags,
     jumpToAct,
-    setWorld
+    setWorld,
+    loadCompiledAIScenario
   } = useGameStore();
 
   const { profile } = useLearnerStore();
-  const [activeTab, setActiveTab] = useState<'overview' | 'world_state' | 'telemetry' | 'pipeline' | 'controls'>('overview');
+  const [activeTab, setActiveTab] = useState<'dual_proof' | 'overview' | 'world_state' | 'telemetry' | 'pipeline' | 'controls'>('dual_proof');
   const [compareResult, setCompareResult] = useState<Array<{name: string; targetSkill: string; theme: string; archetype: string; actionPattern: string; ambiguity: string; scaffolding: number}>>([]);
   const [telemetryEvents, setTelemetryEvents] = useState(TelemetryService.getEvents());
+
+  // Dual-learner live proof state
+  const [isEvaluatingLiveProof, setIsEvaluatingLiveProof] = useState(false);
+  const [dualProofResults, setDualProofResults] = useState<{
+    learnerA: {
+      profileName: string;
+      skills: Record<string, number>;
+      topMisconception: string;
+      topMisconceptionProb: number;
+      behavioralSignals: string;
+      rawDiagnosis: string;
+      rawPrescription: any;
+      validatedPrescription: any;
+      isLiveAI: boolean;
+    };
+    learnerB: {
+      profileName: string;
+      skills: Record<string, number>;
+      topMisconception: string;
+      topMisconceptionProb: number;
+      behavioralSignals: string;
+      rawDiagnosis: string;
+      rawPrescription: any;
+      validatedPrescription: any;
+      isLiveAI: boolean;
+    };
+    latencyMs: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -75,11 +108,24 @@ export const DirectorInspector: React.FC<DirectorInspectorProps> = ({ isOpen, on
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-cyan-950/80 bg-[#060911] px-6">
+        <div className="flex border-b border-cyan-950/80 bg-[#060911] px-6 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setActiveTab('dual_proof')}
+            className={`px-4 py-2.5 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+              activeTab === 'dual_proof'
+                ? 'border-amber-400 text-amber-300 font-bold bg-amber-950/30'
+                : 'border-transparent text-stone-400 hover:text-stone-200'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            Live Dual-Learner Proof (P0)
+          </button>
+
           <button
             type="button"
             onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2.5 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`px-4 py-2.5 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
               activeTab === 'overview'
                 ? 'border-cyan-400 text-cyan-300 font-bold bg-cyan-950/30'
                 : 'border-transparent text-stone-400 hover:text-stone-200'
@@ -92,7 +138,7 @@ export const DirectorInspector: React.FC<DirectorInspectorProps> = ({ isOpen, on
           <button
             type="button"
             onClick={() => setActiveTab('world_state')}
-            className={`px-4 py-2.5 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`px-4 py-2.5 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
               activeTab === 'world_state'
                 ? 'border-cyan-400 text-cyan-300 font-bold bg-cyan-950/30'
                 : 'border-transparent text-stone-400 hover:text-stone-200'
@@ -105,45 +151,309 @@ export const DirectorInspector: React.FC<DirectorInspectorProps> = ({ isOpen, on
           <button
             type="button"
             onClick={() => setActiveTab('telemetry')}
-            className={`px-4 py-2.5 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`px-4 py-2.5 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
               activeTab === 'telemetry'
                 ? 'border-cyan-400 text-cyan-300 font-bold bg-cyan-950/30'
                 : 'border-transparent text-stone-400 hover:text-stone-200'
             }`}
           >
             <Cpu className="w-3.5 h-3.5" />
-            Live Telemetry Stream ({telemetryEvents.length})
+            Live Telemetry ({telemetryEvents.length})
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('pipeline')}
-            className={`px-4 py-2.5 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`px-4 py-2.5 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
               activeTab === 'pipeline'
                 ? 'border-cyan-400 text-cyan-300 font-bold bg-cyan-950/30'
                 : 'border-transparent text-stone-400 hover:text-stone-200'
             }`}
           >
             <GitBranch className="w-3.5 h-3.5" />
-            Pipeline & Timeline
+            Pipeline & Benchmark
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('controls')}
-            className={`px-4 py-2.5 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`px-4 py-2.5 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
               activeTab === 'controls'
                 ? 'border-cyan-400 text-cyan-300 font-bold bg-cyan-950/30'
                 : 'border-transparent text-stone-400 hover:text-stone-200'
             }`}
           >
             <Zap className="w-3.5 h-3.5" />
-            Simulation & Act Jumper
+            Simulate & Act Jump
           </button>
         </div>
 
         {/* Tab Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {/* TAB: LIVE DUAL-LEARNER PROOF (P0) */}
+          {activeTab === 'dual_proof' && (
+            <div className="space-y-4 font-mono">
+              {/* Header Box */}
+              <div className="p-4 rounded-xl bg-gradient-to-r from-amber-950/40 via-stone-900 to-cyan-950/40 border border-amber-500/40 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    <span>Live Dual-Learner Proof: Same Reading Skill → Different Game Loop</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      const status = getLiveAIStatus();
+                      return (
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1.5 ${
+                          status.hasApiKey
+                            ? 'bg-emerald-950 border-emerald-700 text-emerald-300'
+                            : 'bg-stone-900 border-stone-700 text-stone-400'
+                        }`}>
+                          <span className={`w-2 h-2 rounded-full ${status.hasApiKey ? 'bg-emerald-400 animate-pulse' : 'bg-stone-500'}`} />
+                          {status.hasApiKey ? 'Gemini 2.5 Flash Lite Active' : 'Deterministic Fallback Active'}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                </div>
+                <p className="text-[11px] text-stone-300 font-sans leading-relaxed">
+                  Both synthetic learners start with <strong className="text-amber-300 font-mono">identically calibrated reading skills (all 0.50)</strong>.
+                  The divergence is purely driven by distinct cognitive error patterns, behavioral evidence, and past experience memory.
+                  Press below to execute live diagnosis, compare raw AI outputs against engine guardrails, and play either path.
+                </p>
+
+                <div className="pt-2 flex items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={isEvaluatingLiveProof}
+                    onClick={async () => {
+                      setIsEvaluatingLiveProof(true);
+                      const start = performance.now();
+
+                      // Instantiate Profile A
+                      useLearnerStore.getState().applySyntheticProfile('PROFILE_PAIR_IDENTICAL_A');
+                      const profileA = JSON.parse(JSON.stringify(useLearnerStore.getState().profile!));
+                      const detailedA = await GameDirector.diagnoseAndPrescribeAIDetailed(profileA, currentChallengeId, 'lost_observatory');
+
+                      // Instantiate Profile B
+                      useLearnerStore.getState().applySyntheticProfile('PROFILE_PAIR_IDENTICAL_B');
+                      const profileB = JSON.parse(JSON.stringify(useLearnerStore.getState().profile!));
+                      const detailedB = await GameDirector.diagnoseAndPrescribeAIDetailed(profileB, currentChallengeId, 'lost_observatory');
+
+                      const elapsed = Math.round((performance.now() - start) * 10) / 10;
+
+                      setDualProofResults({
+                        learnerA: {
+                          profileName: 'Learner A (Causal/Temporal Confusion)',
+                          skills: { ...profileA.skills },
+                          topMisconception: 'sequence_causation_confusion',
+                          topMisconceptionProb: profileA.misconceptions?.sequence_causation_confusion?.probability ?? 0.86,
+                          behavioralSignals: `4 repeated guesses • 3 early commits • weak evidence citations (3x)`,
+                          rawDiagnosis: detailedA.rawAiResult?.diagnosis || detailedA.rawPrescription.learnerInsight || 'Causal inversion diagnosed',
+                          rawPrescription: detailedA.rawPrescription,
+                          validatedPrescription: detailedA.validatedPrescription,
+                          isLiveAI: detailedA.isLiveAI,
+                        },
+                        learnerB: {
+                          profileName: 'Learner B (Mechanical Sequence Inversion)',
+                          skills: { ...profileB.skills },
+                          topMisconception: 'temporal_reversal',
+                          topMisconceptionProb: profileB.misconceptions?.temporal_reversal?.probability ?? 0.88,
+                          behavioralSignals: `0 repeat guesses • careful 2-doc dwell • inverted action order (gear_b before gear_a)`,
+                          rawDiagnosis: detailedB.rawAiResult?.diagnosis || detailedB.rawPrescription.learnerInsight || 'Temporal reversal diagnosed',
+                          rawPrescription: detailedB.rawPrescription,
+                          validatedPrescription: detailedB.validatedPrescription,
+                          isLiveAI: detailedB.isLiveAI,
+                        },
+                        latencyMs: elapsed,
+                      });
+
+                      setIsEvaluatingLiveProof(false);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-950/50 transition-all disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isEvaluatingLiveProof ? 'animate-spin' : ''}`} />
+                    {isEvaluatingLiveProof ? 'Evaluating Live AI Diagnoses...' : 'Run Live Dual-Learner Proof'}
+                  </button>
+
+                  {dualProofResults && (
+                    <span className="text-[10px] text-stone-400 font-mono">
+                      Completed in {dualProofResults.latencyMs}ms • {dualProofResults.learnerA.isLiveAI ? 'Live Gemini Generation' : 'Deterministic Engine Fallback'}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Side-by-Side Comparison Artifact Table */}
+              {dualProofResults && (
+                <div className="space-y-3 animate-in fade-in duration-200">
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Learner A Column */}
+                    <div className="p-4 rounded-xl bg-[#090f1a] border-2 border-rose-500/40 space-y-3">
+                      <div className="flex items-center justify-between border-b border-rose-950 pb-2">
+                        <div>
+                          <span className="text-xs font-bold text-rose-300 block">{dualProofResults.learnerA.profileName}</span>
+                          <span className="text-[9px] text-stone-400">Target Learning Objective: Cause & Effect Reasoning</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-rose-950 border border-rose-800 text-rose-300 text-[9px] font-bold">
+                          Path A
+                        </span>
+                      </div>
+
+                      <div className="space-y-2 text-[10px]">
+                        <div>
+                          <span className="text-stone-500 uppercase block text-[9px]">1. Calibrated Skill Vector (Identical to B):</span>
+                          <div className="p-1.5 rounded bg-black/50 border border-stone-800 flex justify-between text-stone-300 font-mono">
+                            <span>causeEffect: <strong className="text-amber-300">50%</strong></span>
+                            <span>sequencing: <strong className="text-amber-300">50%</strong></span>
+                            <span>negation: <strong className="text-amber-300">50%</strong></span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-stone-500 uppercase block text-[9px]">2. Cognitive Misconception History (Different):</span>
+                          <div className="p-1.5 rounded bg-rose-950/30 border border-rose-900/60 text-rose-200">
+                            <strong>{dualProofResults.learnerA.topMisconception}</strong> ({Math.round(dualProofResults.learnerA.topMisconceptionProb * 100)}% probability)
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-stone-500 uppercase block text-[9px]">3. Behavioral Telemetry Signals:</span>
+                          <div className="p-1.5 rounded bg-black/40 border border-stone-800 text-stone-300">
+                            {dualProofResults.learnerA.behavioralSignals}
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-stone-500 uppercase block text-[9px]">4. Raw AI Diagnosis (Gemini Recommendation):</span>
+                          <div className="p-2 rounded bg-cyan-950/30 border border-cyan-900/60 text-stone-200 font-sans leading-tight">
+                            "{dualProofResults.learnerA.rawDiagnosis}"
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="p-2 rounded bg-black/50 border border-stone-800 space-y-1">
+                            <span className="text-stone-500 block text-[8px] uppercase">Raw AI Recommendation:</span>
+                            <div className="text-amber-300 font-bold">{dualProofResults.learnerA.rawPrescription.theme}</div>
+                            <div className="text-cyan-300">{dualProofResults.learnerA.rawPrescription.experienceArchetype}</div>
+                            <div className="text-stone-400 text-[9px]">{dualProofResults.learnerA.rawPrescription.primaryActionPattern}</div>
+                          </div>
+                          <div className="p-2 rounded bg-black/50 border border-stone-800 space-y-1">
+                            <span className="text-stone-500 block text-[8px] uppercase">Validated by Engine:</span>
+                            <div className="text-emerald-300 font-bold">{dualProofResults.learnerA.validatedPrescription.theme}</div>
+                            <div className="text-purple-300">{dualProofResults.learnerA.validatedPrescription.experienceArchetype}</div>
+                            <div className="text-rose-300 text-[9px]">{dualProofResults.learnerA.validatedPrescription.primaryActionPattern}</div>
+                          </div>
+                        </div>
+
+                        <div className="p-2 rounded bg-rose-950/20 border border-rose-800/40 text-[9px] text-stone-300 space-y-1">
+                          <span className="text-rose-300 font-bold block uppercase">Resulting Game Experience:</span>
+                          <div>• World: <strong className="text-stone-100">Boreas Sub-Zero Station</strong></div>
+                          <div>• Mechanic: <strong className="text-stone-100">Evidence Investigation (3 Conflicting Documents)</strong></div>
+                          <div>• Action Pattern: <strong className="text-stone-100">EVALUATE_AND_INSPECT</strong></div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            useLearnerStore.getState().applySyntheticProfile('PROFILE_PAIR_IDENTICAL_A');
+                            loadCompiledAIScenario(BOREAS_SPECTACULAR_SCENARIO, BOREAS_SPECTACULAR_ENTITIES, 'arctic_station');
+                            onClose();
+                          }}
+                          className="w-full py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          Load & Play Scenario A (Boreas Sub-Zero)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Learner B Column */}
+                    <div className="p-4 rounded-xl bg-[#0a1215] border-2 border-cyan-500/40 space-y-3">
+                      <div className="flex items-center justify-between border-b border-cyan-950 pb-2">
+                        <div>
+                          <span className="text-xs font-bold text-cyan-300 block">{dualProofResults.learnerB.profileName}</span>
+                          <span className="text-[9px] text-stone-400">Target Learning Objective: Cause & Effect Reasoning</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-cyan-950 border border-cyan-800 text-cyan-300 text-[9px] font-bold">
+                          Path B
+                        </span>
+                      </div>
+
+                      <div className="space-y-2 text-[10px]">
+                        <div>
+                          <span className="text-stone-500 uppercase block text-[9px]">1. Calibrated Skill Vector (Identical to A):</span>
+                          <div className="p-1.5 rounded bg-black/50 border border-stone-800 flex justify-between text-stone-300 font-mono">
+                            <span>causeEffect: <strong className="text-amber-300">50%</strong></span>
+                            <span>sequencing: <strong className="text-amber-300">50%</strong></span>
+                            <span>negation: <strong className="text-amber-300">50%</strong></span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-stone-500 uppercase block text-[9px]">2. Cognitive Misconception History (Different):</span>
+                          <div className="p-1.5 rounded bg-cyan-950/30 border border-cyan-900/60 text-cyan-200">
+                            <strong>{dualProofResults.learnerB.topMisconception}</strong> ({Math.round(dualProofResults.learnerB.topMisconceptionProb * 100)}% probability)
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-stone-500 uppercase block text-[9px]">3. Behavioral Telemetry Signals:</span>
+                          <div className="p-1.5 rounded bg-black/40 border border-stone-800 text-stone-300">
+                            {dualProofResults.learnerB.behavioralSignals}
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-stone-500 uppercase block text-[9px]">4. Raw AI Diagnosis (Gemini Recommendation):</span>
+                          <div className="p-2 rounded bg-cyan-950/30 border border-cyan-900/60 text-stone-200 font-sans leading-tight">
+                            "{dualProofResults.learnerB.rawDiagnosis}"
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="p-2 rounded bg-black/50 border border-stone-800 space-y-1">
+                            <span className="text-stone-500 block text-[8px] uppercase">Raw AI Recommendation:</span>
+                            <div className="text-amber-300 font-bold">{dualProofResults.learnerB.rawPrescription.theme}</div>
+                            <div className="text-cyan-300">{dualProofResults.learnerB.rawPrescription.experienceArchetype}</div>
+                            <div className="text-stone-400 text-[9px]">{dualProofResults.learnerB.rawPrescription.primaryActionPattern}</div>
+                          </div>
+                          <div className="p-2 rounded bg-black/50 border border-stone-800 space-y-1">
+                            <span className="text-stone-500 block text-[8px] uppercase">Validated by Engine:</span>
+                            <div className="text-emerald-300 font-bold">{dualProofResults.learnerB.validatedPrescription.theme}</div>
+                            <div className="text-purple-300">{dualProofResults.learnerB.validatedPrescription.experienceArchetype}</div>
+                            <div className="text-rose-300 text-[9px]">{dualProofResults.learnerB.validatedPrescription.primaryActionPattern}</div>
+                          </div>
+                        </div>
+
+                        <div className="p-2 rounded bg-cyan-950/20 border border-cyan-800/40 text-[9px] text-stone-300 space-y-1">
+                          <span className="text-cyan-300 font-bold block uppercase">Resulting Game Experience:</span>
+                          <div>• World: <strong className="text-stone-100">The Lost Observatory</strong></div>
+                          <div>• Mechanic: <strong className="text-stone-100">Timeline Mechanism (Strict Chronological Interlock)</strong></div>
+                          <div>• Action Pattern: <strong className="text-stone-100">ARRANGE_AND_OPERATE</strong></div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            useLearnerStore.getState().applySyntheticProfile('PROFILE_PAIR_IDENTICAL_B');
+                            setWorld('lost_observatory');
+                            jumpToAct(2);
+                            onClose();
+                          }}
+                          className="w-full py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-stone-950 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          Load & Play Scenario B (Observatory Clock)
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-4">

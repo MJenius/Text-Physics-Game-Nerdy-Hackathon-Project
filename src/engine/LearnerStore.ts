@@ -126,7 +126,7 @@ interface LearnerStore {
   recordEvidenceAttribution: (skill: ReadingSkill, passed: boolean) => void;
   setDirectorDiagnosis: (headline: string, insight: string, details?: Partial<NonNullable<LearnerProfile['lastDiagnosis']>>) => void;
   recordInterventionResult: (archetype: string, world: string, outcomeSuccess: boolean) => void;
-  applySyntheticProfile: (profileType: 'PROFILE_CAUSAL' | 'PROFILE_SEQUENCE' | 'PROFILE_NEGATION' | 'PROFILE_SURFACE_GUESSER' | 'PROFILE_STRONG_TRANSFER') => void;
+  applySyntheticProfile: (profileType: 'PROFILE_CAUSAL' | 'PROFILE_SEQUENCE' | 'PROFILE_NEGATION' | 'PROFILE_SURFACE_GUESSER' | 'PROFILE_STRONG_TRANSFER' | 'PROFILE_PAIR_IDENTICAL_A' | 'PROFILE_PAIR_IDENTICAL_B') => void;
   recordChallengeResult: (data: {
     challengeId: string;
     skill: ReadingSkill;
@@ -538,6 +538,63 @@ export const useLearnerStore = create<LearnerStore>()(
               prof.behavioralLog.recoveriesAfterFailure = 2;
               prof.experienceMemory.worldsExperienced = ['lost_observatory', 'arctic_station'];
               prof.experienceMemory.archetypesExperienced = ['MECHANISM', 'INVESTIGATION', 'TIMELINE', 'RESOURCE'];
+              prof.experienceMemory.transferOutcomes = [];
+              break;
+            case 'PROFILE_PAIR_IDENTICAL_A':
+              // Exact 0.50 skill across all 8 dimensions — identical to Learner B
+              prof.skills.literalRetrieval = 0.50;
+              prof.skills.sequencing = 0.50;
+              prof.skills.causeEffect = 0.50;
+              prof.skills.negativeConstraint = 0.50;
+              prof.skills.multiCondition = 0.50;
+              prof.skills.inference = 0.50;
+              prof.skills.synthesis = 0.50;
+              prof.skills.transfer = 0.50;
+              prof.skillConfidence.causeEffect = 0.35;
+              prof.skillConfidence.sequencing = 0.35;
+              // Distinct cognitive history: Causal/Sequence confusion, guess-and-check behavioral evidence
+              prof.misconceptions.sequence_causation_confusion = { probability: 0.86, evidenceCount: 4 };
+              prof.misconceptions.causal_inversion = { probability: 0.74, evidenceCount: 3 };
+              prof.misconceptions.temporal_reversal = { probability: 0.12, evidenceCount: 0 };
+              prof.errorPatterns.causalInversions = 3;
+              prof.behavioralLog.documentsOpened = ['emergency_log_alpha'];
+              prof.behavioralLog.readingOrder = ['emergency_log_alpha'];
+              prof.behavioralLog.actionsAttempted = ['ACTIVATE:pump_b', 'ACTIVATE:pump_b', 'ACTIVATE:valve_a'];
+              prof.behavioralLog.repeatedGuesses = 4;
+              prof.behavioralLog.earlyCommitments = 3;
+              prof.behavioralLog.luckyAnswerCounts.correct_answer_weak_evidence = 3;
+              prof.behavioralLog.luckyAnswerCounts.wrong_answer_irrelevant_reasoning = 2;
+              prof.experienceMemory.worldsExperienced = ['lost_observatory'];
+              prof.experienceMemory.archetypesExperienced = ['MECHANISM'];
+              prof.experienceMemory.transferOutcomes = [];
+              break;
+            case 'PROFILE_PAIR_IDENTICAL_B':
+              // Exact 0.50 skill across all 8 dimensions — identical to Learner A
+              prof.skills.literalRetrieval = 0.50;
+              prof.skills.sequencing = 0.50;
+              prof.skills.causeEffect = 0.50;
+              prof.skills.negativeConstraint = 0.50;
+              prof.skills.multiCondition = 0.50;
+              prof.skills.inference = 0.50;
+              prof.skills.synthesis = 0.50;
+              prof.skills.transfer = 0.50;
+              prof.skillConfidence.causeEffect = 0.35;
+              prof.skillConfidence.sequencing = 0.35;
+              // Distinct cognitive history: Sequence reversal in tactile mechanism, careful reader with systematic recovery
+              prof.misconceptions.temporal_reversal = { probability: 0.88, evidenceCount: 4 };
+              prof.misconceptions.missed_prerequisite = { probability: 0.76, evidenceCount: 3 };
+              prof.misconceptions.sequence_causation_confusion = { probability: 0.10, evidenceCount: 0 };
+              prof.errorPatterns.temporalReversals = 3;
+              prof.behavioralLog.documentsOpened = ['field_journal_main', 'maintenance_manual_v2'];
+              prof.behavioralLog.readingOrder = ['maintenance_manual_v2', 'field_journal_main'];
+              prof.behavioralLog.actionsAttempted = ['TURN:gear_b', 'TURN:gear_a', 'TURN:gear_b'];
+              prof.behavioralLog.actionOrdering = ['TURN:gear_b', 'TURN:gear_a', 'TURN:gear_b'];
+              prof.behavioralLog.repeatedGuesses = 0;
+              prof.behavioralLog.earlyCommitments = 0;
+              prof.behavioralLog.recoveriesAfterFailure = 2;
+              prof.behavioralLog.luckyAnswerCounts.correct_answer_correct_evidence = 2;
+              prof.experienceMemory.worldsExperienced = ['lost_observatory'];
+              prof.experienceMemory.archetypesExperienced = ['INVESTIGATION'];
               prof.experienceMemory.transferOutcomes = [];
               break;
           }

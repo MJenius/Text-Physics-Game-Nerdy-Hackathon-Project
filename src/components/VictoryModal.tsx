@@ -41,7 +41,7 @@ export const VictoryModal: React.FC = () => {
 };
 
 const VictoryModalContent: React.FC<{ sessionStartTime: number }> = ({ sessionStartTime }) => {
-  const { totalAttempts, failedAttempts, rereadCount, restartFullGame } = useGameStore();
+  const { totalAttempts, failedAttempts, rereadCount, restartFullGame, narrative } = useGameStore();
   const [durationSec] = React.useState(() => Math.max(1, Math.round((Date.now() - sessionStartTime) / 1000)));
 
   const minutes = Math.floor(durationSec / 60);
@@ -50,6 +50,24 @@ const VictoryModalContent: React.FC<{ sessionStartTime: number }> = ({ sessionSt
 
   const accuracyRate = totalAttempts > 0 ? Math.round(((totalAttempts - failedAttempts) / totalAttempts) * 100) : 100;
 
+  const worldId = narrative.activeWorldId || 'lost_observatory';
+  const worldTitle =
+    worldId === 'arctic_station'
+      ? 'Boreas Sub-Zero Station Restored!'
+      : worldId === 'triton_deep_sea'
+      ? 'Triton-IV Trench Station Stabilized!'
+      : worldId === 'orbital_habitat'
+      ? 'Aether-9 Solar Coronagraph Calibrated!'
+      : 'The Lost Observatory Activated!';
+
+  const worldSubtitle =
+    worldId === 'arctic_station'
+      ? 'You mastered thermal siphons, katabatic locks, and prehistoric stratigraphy through rigorous reading deduction.'
+      : worldId === 'triton_deep_sea'
+      ? 'You resolved hydrothermal cavitation and stabilized the abyssal geothermal core using pure technical reading analysis.'
+      : worldId === 'orbital_habitat'
+      ? 'You synthesized multi-source baseline vectors and Faraday shifts to shield sensitive photomultipliers from coronal flares.'
+      : 'You have completed the full journey through Mount Caelum. Every physical mechanism was unlocked solely through reading and understanding the text.';
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-500">
       <div className="relative w-full max-w-lg rounded-3xl border-2 border-amber-500/80 bg-gradient-to-b from-slate-900 to-[#070b14] p-8 shadow-[0_0_50px_rgba(245,158,11,0.3)] flex flex-col items-center text-center">
@@ -59,10 +77,10 @@ const VictoryModalContent: React.FC<{ sessionStartTime: number }> = ({ sessionSt
         </div>
 
         <h2 className="text-2xl sm:text-3xl font-serif font-bold text-amber-200 tracking-wide">
-          Observatory Activated!
+          {worldTitle}
         </h2>
         <p className="text-xs sm:text-sm text-slate-300 mt-2 font-serif max-w-sm">
-          You have completed the full 6-stage journey through The Lost Observatory. Every physical discovery was made solely through reading and understanding the text.
+          {worldSubtitle}
         </p>
 
         {/* Telemetry & Performance Metrics Card */}

@@ -33,6 +33,8 @@ export const StageViewport: React.FC = () => {
   const {
     currentChallenge,
     entities,
+    inventory,
+    flags,
     selectedInventoryItem,
     executeAction,
     executeDecision,
@@ -169,9 +171,9 @@ export const StageViewport: React.FC = () => {
     const isDoorOpen = Boolean(entities['archive_door']?.states?.isOpen);
 
     return (
-      <div className="w-full max-w-xl flex flex-col items-center font-serif">
-        <div className="relative w-full rounded-2xl border-4 border-stone-800 bg-[#0c1017] p-6 shadow-2xl overflow-hidden">
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-stone-800 border border-stone-700 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-stone-300 uppercase shadow">
+      <div className="w-full max-w-xl flex flex-col items-center font-serif pt-2">
+        <div className="relative w-full rounded-2xl border-4 border-stone-800 bg-[#0c1017] p-6 shadow-2xl mt-3">
+          <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-stone-800 border border-stone-700 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-stone-300 uppercase shadow z-10 whitespace-nowrap">
             Vestibule Outer Portal — Mount Caelum Gateway
           </div>
 
@@ -497,14 +499,14 @@ export const StageViewport: React.FC = () => {
     const isShutterUnlocked = Boolean(entities['shutter_lock_wheel']?.states?.isUnlocked);
     const isClockSynced = Boolean(entities['star_clock_sync_switch']?.states?.isSynchronized);
     const hasPrism = Boolean(entities['quartz_receptacle']?.states?.hasPrism);
-    const isDomeOpen = Boolean(entities['master_aperture_lever']?.states?.isDomeOpen);
+    const isDomeOpen = Boolean(entities['master_aperture_lever']?.states?.isDomeOpen) || Boolean(flags['game_won']) || Boolean(narrative.discoveredFacts.includes('finale')) || (isComplete && currentChallenge.id === 'act_7_dome');
     const powerRoute = narrative.playerDecisions['power_allocation']?.value;
     const arisStance = narrative.playerDecisions['aris_alliance_stance']?.value;
 
     return (
-      <div className="w-full max-w-xl flex flex-col items-center font-serif">
-        <div className="relative w-full rounded-2xl border-4 border-amber-600/50 bg-[#0c1017] p-6 shadow-2xl">
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-950 border border-amber-600 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-amber-300 uppercase shadow">
+      <div className="w-full max-w-xl flex flex-col items-center font-serif pt-2">
+        <div className="relative w-full rounded-2xl border-4 border-amber-600/50 bg-[#0c1017] p-6 shadow-2xl mt-3">
+          <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-amber-950 border border-amber-600 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-amber-300 uppercase shadow z-10 whitespace-nowrap">
             Master Celestial Rotunda — Mount Caelum Summit
           </div>
 
@@ -532,6 +534,16 @@ export const StageViewport: React.FC = () => {
               <div className="mt-4 p-4 rounded-xl bg-amber-950/40 border border-amber-500/50 text-xs font-mono text-amber-300">
                 ★ Complete 7-Act Adventure Finished Through Pure Reading Comprehension & Physical Deduction!
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  useGameStore.setState({ hasWonGame: true });
+                }}
+                className="mt-3 flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-mono font-bold uppercase tracking-wider transition-all shadow-lg hover:shadow-[0_0_25px_rgba(245,158,11,0.4)] cursor-pointer"
+              >
+                <span>Conclude Adventure & Review Telemetry</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
           ) : (
             <div className="space-y-4 my-2">
@@ -586,7 +598,17 @@ export const StageViewport: React.FC = () => {
               <div className="flex justify-center pt-2">
                 <button
                   type="button"
-                  onClick={() => handleTargetClick('quartz_receptacle')}
+                  onClick={() => {
+                    if (!hasPrism && inventory.includes('quartz_prism')) {
+                      executeAction({
+                        type: 'USE_ITEM_ON',
+                        sourceId: 'quartz_prism',
+                        targetId: 'quartz_receptacle'
+                      });
+                    } else {
+                      handleTargetClick('quartz_receptacle');
+                    }
+                  }}
                   className={`px-6 py-3 rounded-xl border flex items-center gap-2 font-mono text-xs transition-all cursor-pointer ${
                     hasPrism
                       ? 'bg-amber-950/30 border-amber-500/60 text-amber-200'
@@ -594,7 +616,7 @@ export const StageViewport: React.FC = () => {
                   }`}
                 >
                   <Sparkles className="w-4 h-4 text-amber-400" />
-                  <span>{hasPrism ? '589nm Quartz Prism Fitted in Focal Train' : 'Prism Cradle: Empty'}</span>
+                  <span>{hasPrism ? '589nm Quartz Prism Fitted in Focal Train' : 'Prism Cradle: Empty (Click with Prism to seat)'}</span>
                 </button>
               </div>
 
@@ -627,9 +649,9 @@ export const StageViewport: React.FC = () => {
     const isOpen = Boolean(entities['lab_pressure_seal']?.states?.isOpen);
 
     return (
-      <div className="w-full max-w-xl flex flex-col items-center font-serif">
-        <div className="relative w-full rounded-2xl border-4 border-sky-900 bg-[#07131e] p-6 shadow-2xl overflow-hidden">
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-sky-950 border border-sky-600 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-sky-300 uppercase shadow">
+      <div className="w-full max-w-xl flex flex-col items-center font-serif pt-2">
+        <div className="relative w-full rounded-2xl border-4 border-sky-900 bg-[#07131e] p-6 shadow-2xl mt-3">
+          <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-sky-950 border border-sky-600 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-sky-300 uppercase shadow z-10 whitespace-nowrap">
             Boreas Sub-Zero Station • Outer Airlock (-48°C / 85 Knots)
           </div>
 
@@ -707,7 +729,7 @@ export const StageViewport: React.FC = () => {
           title="Diesel Generator Thermal Siphon"
           totalBudgetUnits={85}
           unitLabel="kW"
-          instructionSnippet="Allocate the 85 kW diesel thermal budget. Pre-Heater needs min 25 kW, Cryostat min 30 kW, Quarters min 30 kW."
+          instructionSnippet="Allocate the 85 kW diesel thermal budget to maintain critical station subsystems according to the thermal engineering log."
           resources={[
             {
               id: 'preheater',
@@ -718,7 +740,7 @@ export const StageViewport: React.FC = () => {
               sliderMin: 10,
               sliderMax: 55,
               unitLabel: 'kW',
-              description: 'Operational minimum: 25 kW (prevents paraffin wax crystallization in fuel pump).'
+              description: 'Continuous thermal feed preventing paraffin wax crystallization in fuel pump.'
             },
             {
               id: 'cryostat',
@@ -729,7 +751,7 @@ export const StageViewport: React.FC = () => {
               sliderMin: 10,
               sliderMax: 55,
               unitLabel: 'kW',
-              description: 'Operational minimum: 30 kW (prevents melting of 10,000-year prehistoric ice cores).'
+              description: 'Refrigeration circuit maintaining prehistoric 10,000-year ice core cylinders.'
             },
             {
               id: 'quarters',
@@ -740,7 +762,7 @@ export const StageViewport: React.FC = () => {
               sliderMin: 10,
               sliderMax: 55,
               unitLabel: 'kW',
-              description: 'Operational minimum: 30 kW (maintains +18°C livable temperature for station crew).'
+              description: 'Radiator heating array providing livable atmospheric temperature for station crew.'
             }
           ]}
           onCommitAllocation={(allocations, _isBalanced, overBudget) => {
@@ -819,9 +841,9 @@ export const StageViewport: React.FC = () => {
     const tempC = (entities['core_temp_monitor']?.states?.tempC as number) || 480;
 
     return (
-      <div className="w-full max-w-xl flex flex-col items-center font-serif">
-        <div className="relative w-full rounded-2xl border-4 border-cyan-900 bg-[#04151b] p-6 shadow-2xl overflow-hidden">
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-cyan-950 border border-cyan-500 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-cyan-300 uppercase shadow">
+      <div className="w-full max-w-xl flex flex-col items-center font-serif pt-2">
+        <div className="relative w-full rounded-2xl border-4 border-cyan-900 bg-[#04151b] p-6 shadow-2xl mt-3">
+          <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-cyan-950 border border-cyan-500 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-cyan-300 uppercase shadow z-10 whitespace-nowrap">
             Station Triton-IV • Reactor Delta (Depth 6,000m • 600 atm)
           </div>
 
@@ -879,9 +901,9 @@ export const StageViewport: React.FC = () => {
     const isCalibrated = Boolean(entities['polarizer_filter_gimbal']?.states?.isCalibrated);
 
     return (
-      <div className="w-full max-w-xl flex flex-col items-center font-serif">
-        <div className="relative w-full rounded-2xl border-4 border-blue-900 bg-[#05070d] p-6 shadow-2xl overflow-hidden mb-4">
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-950 border border-blue-500 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-blue-300 uppercase shadow">
+      <div className="w-full max-w-xl flex flex-col items-center font-serif pt-2">
+        <div className="relative w-full rounded-2xl border-4 border-blue-900 bg-[#05070d] p-6 shadow-2xl mt-3 mb-4">
+          <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-blue-950 border border-blue-500 px-4 py-0.5 rounded text-[10px] font-mono tracking-widest text-blue-300 uppercase shadow z-10 whitespace-nowrap">
             Aether-9 Orbital Observatory • Sun-Earth L1 Lagrange
           </div>
           <div className="text-xs font-mono text-stone-300 mb-3 flex items-center justify-between border-b border-blue-900/50 pb-2">
@@ -895,33 +917,58 @@ export const StageViewport: React.FC = () => {
             </span>
           </div>
 
-          <CalibrateArchetype
-            title="Coronagraph Quartz Polarizer Calibration"
-            variableName="Polarization Angle"
-            unit="deg"
-            initialValue={0}
-            minValue={0}
-            maxValue={90}
-            step={1}
-            targetValue={48}
-            tolerance={2}
-            instructionSnippet="Rotate the quartz polarizing filter to 48° (±2°) to absorb coronal plasma flare flux."
-            onCommit={(val, isAccurate) => {
-              if (isAccurate) {
-                useGameStore.setState((draft) => {
-                  if (draft.entities['polarizer_filter_gimbal']?.states) {
-                    draft.entities['polarizer_filter_gimbal'].states.angleDeg = val;
-                    draft.entities['polarizer_filter_gimbal'].states.isCalibrated = true;
-                  }
-                  draft.flags['orbital_coronagraph_aligned'] = true;
-                  draft.isComplete = true;
-                });
-                handleTargetClick('polarizer_filter_gimbal');
-              } else {
-                handleTargetClick('polarizer_filter_gimbal');
-              }
-            }}
-          />
+          {isCalibrated ? (
+            <div className="py-8 flex flex-col items-center justify-center animate-in zoom-in-95 duration-700 text-center space-y-4">
+              <Sparkles className="w-16 h-16 text-blue-300 animate-spin mb-1" />
+              <h2 className="text-2xl font-bold text-blue-200 font-serif">
+                SOLAR CORONA INTERFEROMETRY ACTIVE!
+              </h2>
+              <p className="text-xs text-stone-300 max-w-md leading-relaxed font-serif">
+                Quartz polarizer gimbal locked at true incident angle. The photomultiplier array is fully shielded against hard x-ray flux, streaming unprecedented high-resolution solar flares from the Sun-Earth L1 Lagrange point.
+              </p>
+              <div className="p-4 rounded-xl bg-blue-950/40 border border-blue-500/50 text-xs font-mono text-blue-300">
+                ★ Mission Objective Accomplished: Multi-Source Text Synthesis Successfully Derived & Executed!
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  useGameStore.setState({ hasWonGame: true });
+                }}
+                className="mt-2 flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-500 hover:bg-blue-400 text-slate-950 text-xs font-mono font-bold uppercase tracking-wider transition-all shadow-lg hover:shadow-[0_0_25px_rgba(59,130,246,0.4)] cursor-pointer"
+              >
+                <span>Conclude Mission & Review Telemetry</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <CalibrateArchetype
+              title="Coronagraph Quartz Polarizer Calibration"
+              variableName="Polarization Angle"
+              unit="deg"
+              initialValue={0}
+              minValue={0}
+              maxValue={90}
+              step={1}
+              targetValue={48}
+              tolerance={2}
+              instructionSnippet="Rotate the quartz polarizing filter to the net effective incident plasma angle derived from the mission dossiers."
+              onCommit={(val, isAccurate) => {
+                if (isAccurate) {
+                  useGameStore.setState((draft) => {
+                    if (draft.entities['polarizer_filter_gimbal']?.states) {
+                      draft.entities['polarizer_filter_gimbal'].states.angleDeg = val;
+                      draft.entities['polarizer_filter_gimbal'].states.isCalibrated = true;
+                    }
+                    draft.flags['orbital_coronagraph_aligned'] = true;
+                    draft.isComplete = true;
+                  });
+                  handleTargetClick('polarizer_filter_gimbal');
+                } else {
+                  handleTargetClick('polarizer_filter_gimbal');
+                }
+              }}
+            />
+          )}
         </div>
       </div>
     );

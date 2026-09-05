@@ -31,7 +31,7 @@ export const DirectorHUD: React.FC<DirectorHUDProps> = ({ onOpenTransfer, canTri
   const isTransferReady = canTriggerTransfer || profile.lastDiagnosis?.headline.includes('Transfer');
 
   return (
-    <div className="w-full bg-stone-950/80 border-b border-stone-800 px-6 py-2 z-20 select-none animate-in fade-in duration-300 font-serif">
+    <div className="w-full bg-stone-950/80 border-b border-stone-800 px-6 py-2 z-10 select-none animate-in fade-in duration-300 font-serif">
       <div className="flex items-center justify-between gap-4">
         {/* Natural Narrative Insight */}
         <div className="flex items-center gap-3 overflow-hidden">

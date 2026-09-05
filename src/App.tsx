@@ -27,6 +27,7 @@ export const App: React.FC = () => {
     currentAct,
     loadAdaptedPassage,
     isEvidenceModalOpen,
+    evidenceModalContext,
     closeEvidenceModal,
     isTransferModeActive,
     loadHeroTransferScenario,
@@ -121,7 +122,7 @@ export const App: React.FC = () => {
       <NotebookModal />
 
       {/* Top Navigation Bar */}
-      <header className="h-14 border-b border-stone-800/80 bg-stone-950/90 backdrop-blur-md px-6 flex items-center justify-between z-20 shrink-0">
+      <header className="h-14 border-b border-stone-800/80 bg-stone-950/90 backdrop-blur-md px-6 flex items-center justify-between z-30 shrink-0 relative">
         <div className="flex items-center gap-3">
           <div className={`p-1.5 rounded-lg border transition-colors ${
             narrative.activeWorldId === 'arctic_station'
@@ -155,10 +156,10 @@ export const App: React.FC = () => {
                 {isWorldMenuOpen && (
                   <>
                     <div
-                      className="fixed inset-0 z-30"
+                      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]"
                       onClick={() => setIsWorldMenuOpen(false)}
                     />
-                    <div className="absolute left-0 top-full mt-1.5 w-72 rounded-xl bg-[#090d16]/95 border border-stone-700 shadow-2xl backdrop-blur-lg z-40 p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150 font-mono">
+                    <div className="absolute left-0 top-full mt-2 w-80 rounded-xl bg-[#090d16] border-2 border-stone-600 shadow-[0_10px_40px_rgba(0,0,0,0.8)] z-60 p-2 space-y-1.5 animate-in fade-in zoom-in-95 duration-150 font-mono">
                       <div className="px-2.5 py-1 text-[9px] uppercase tracking-wider text-stone-400 font-bold border-b border-stone-800 flex items-center justify-between">
                         <span>Switch World Attunement</span>
                         <span className="text-[8px] text-cyan-400 font-normal">4 Playable Worlds</span>
@@ -324,12 +325,12 @@ export const App: React.FC = () => {
       <EvidenceModal
         isOpen={isEvidenceModalOpen}
         onClose={closeEvidenceModal}
-        targetSkill={(currentChallenge.targetReadingSkill as any) || 'literalRetrieval'}
-        challengeTitle={currentChallenge.title}
-        paragraphs={currentParagraphs}
-        expectedSentenceSnippet={expectedSnippet}
+        targetSkill={(evidenceModalContext?.targetSkill as any) || (currentChallenge.targetReadingSkill as any) || 'literalRetrieval'}
+        challengeTitle={evidenceModalContext?.title || currentChallenge.title}
+        paragraphs={evidenceModalContext?.paragraphs || currentParagraphs}
+        expectedSentenceSnippet={evidenceModalContext?.expectedSnippet || expectedSnippet}
         onVerified={(wasCorrect) => {
-          const skillKey = (currentChallenge.targetReadingSkill as any) || 'literalRetrieval';
+          const skillKey = (evidenceModalContext?.targetSkill as any) || (currentChallenge.targetReadingSkill as any) || 'literalRetrieval';
           useLearnerStore.getState().recordEvidenceAttribution(skillKey, wasCorrect);
         }}
       />

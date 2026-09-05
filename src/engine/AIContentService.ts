@@ -453,3 +453,33 @@ REQUIREMENTS:
 
   return null;
 }
+
+export interface LiveAIStatus {
+  isSdkLoaded: boolean;
+  hasApiKey: boolean;
+  lastDiagnosisSucceeded: boolean | null;
+  lastScenarioGenSucceeded: boolean | null;
+  lastCompilerAccepted: boolean | null;
+  lastLatencyMs: number;
+}
+
+const currentAIStatus: LiveAIStatus = {
+  isSdkLoaded: false,
+  hasApiKey: false,
+  lastDiagnosisSucceeded: null,
+  lastScenarioGenSucceeded: null,
+  lastCompilerAccepted: null,
+  lastLatencyMs: 0,
+};
+
+export function updateAIStatus(update: Partial<LiveAIStatus>): void {
+  Object.assign(currentAIStatus, update);
+}
+
+export function getLiveAIStatus(): LiveAIStatus {
+  return {
+    ...currentAIStatus,
+    isSdkLoaded: genAI !== null,
+    hasApiKey: apiKey !== null,
+  };
+}

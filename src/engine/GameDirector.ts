@@ -51,17 +51,28 @@ export class GameDirector {
       archetype = 'INVESTIGATION';
     }
 
-    // 2. Action Pattern Binding (Requirement: Action pattern must genuinely differ)
-    if (targetSkill === 'causeEffect' || archetype === 'INVESTIGATION' || archetype === 'EVIDENCE') {
-      actionPattern = 'EVALUATE_AND_INSPECT';
-    } else if (targetSkill === 'sequencing' || archetype === 'TIMELINE' || archetype === 'MECHANISM') {
-      actionPattern = 'ARRANGE_AND_OPERATE';
-    } else if (targetSkill === 'negativeConstraint' || archetype === 'RESOURCE' || archetype === 'ROUTE') {
-      actionPattern = 'ALLOCATE_UNDER_EXCLUSION';
-    } else if (targetSkill === 'synthesis' || archetype === 'SYNTHESIS' || archetype === 'CALIBRATE') {
-      actionPattern = 'DEDUCE_STATE_AND_COMMIT';
+    // 2. Action Pattern Binding (Preserve AI recommendation if valid, else infer safely)
+    const validPatterns: PrimaryPlayerActionPattern[] = [
+      'EVALUATE_AND_INSPECT',
+      'ARRANGE_AND_OPERATE',
+      'ALLOCATE_UNDER_EXCLUSION',
+      'DEDUCE_STATE_AND_COMMIT',
+      'FORENSIC_RETRIEVAL'
+    ];
+    if (rawPrescription.primaryActionPattern && validPatterns.includes(rawPrescription.primaryActionPattern)) {
+      actionPattern = rawPrescription.primaryActionPattern;
     } else {
-      actionPattern = 'FORENSIC_RETRIEVAL';
+      if (targetSkill === 'causeEffect' || archetype === 'INVESTIGATION' || archetype === 'EVIDENCE') {
+        actionPattern = 'EVALUATE_AND_INSPECT';
+      } else if (targetSkill === 'sequencing' || archetype === 'TIMELINE' || archetype === 'MECHANISM') {
+        actionPattern = 'ARRANGE_AND_OPERATE';
+      } else if (targetSkill === 'negativeConstraint' || archetype === 'RESOURCE' || archetype === 'ROUTE') {
+        actionPattern = 'ALLOCATE_UNDER_EXCLUSION';
+      } else if (targetSkill === 'synthesis' || archetype === 'SYNTHESIS' || archetype === 'CALIBRATE') {
+        actionPattern = 'DEDUCE_STATE_AND_COMMIT';
+      } else {
+        actionPattern = 'FORENSIC_RETRIEVAL';
+      }
     }
 
     // 3. Experience Memory & Repetition Prevention
@@ -317,6 +328,78 @@ export class GameDirector {
     }
 
     return fallback;
+  }
+
+  /**
+   * Detailed AI diagnosis returning BOTH the raw AI recommendation and the validated prescription.
+   * Crucial for proof: Demonstrates Gemini output alongside deterministic engine guardrails.
+   */
+  static async diagnoseAndPrescribeAIDetailed(
+    profile: LearnerProfile,
+    currentChallengeId: string,
+    currentWorldId: string,
+    lastError?: ErrorClassification
+  ): Promise<{
+    rawAiResult: import('./AIContentService').AIDiagnosisResult | null;
+    rawPrescription: Partial<DirectorPrescription>;
+    validatedPrescription: DirectorPrescription;
+    isLiveAI: boolean;
+  }> {
+    const fallback = this.getDeterministicFallback(profile, currentChallengeId, lastError);
+
+    if (profile.aiEnabled === false) {
+      return {
+        rawAiResult: null,
+        rawPrescription: fallback,
+        validatedPrescription: fallback,
+        isLiveAI: false,
+      };
+    }
+
+    try {
+      const aiResult = await requestAIDiagnosis(profile, currentWorldId);
+      if (aiResult) {
+        const rawPrescription: Partial<DirectorPrescription> = {
+          targetSkill: aiResult.targetSkill,
+          recommendedDifficulty: aiResult.recommendedDifficulty,
+          scaffoldingLevel: aiResult.supportLevel,
+          errorDiagnosed: lastError || (aiResult.targetMisconception as ErrorClassification),
+          experienceArchetype: aiResult.recommendedIntervention,
+          primaryActionPattern: aiResult.primaryActionPattern,
+          ambiguityLevel: aiResult.ambiguity,
+          consequenceIntensity: aiResult.ambiguity === 'high' ? 'severe' : 'moderate',
+          theme: aiResult.recommendedWorld,
+          statusHeadline: `AI Director: ${aiResult.recommendedIntervention} [${aiResult.recommendedWorld.replace(/_/g, ' ').toUpperCase()}]`,
+          learnerInsight: aiResult.diagnosis,
+          triggerTransfer: aiResult.targetSkill === 'transfer',
+          targetTopology: aiResult.targetSkill === 'sequencing' ? 'TOP-1' : 'TOP-2',
+          documentTypes: aiResult.documentTypes,
+          supportStrategy: aiResult.reason,
+        };
+
+        const validatedPrescription = this.validateAndEnforcePrescription(
+          rawPrescription,
+          profile,
+          currentChallengeId
+        );
+
+        return {
+          rawAiResult: aiResult,
+          rawPrescription,
+          validatedPrescription,
+          isLiveAI: true,
+        };
+      }
+    } catch (err) {
+      console.warn('[GameDirector] Detailed AI diagnosis call failed, using fallback:', err);
+    }
+
+    return {
+      rawAiResult: null,
+      rawPrescription: fallback,
+      validatedPrescription: fallback,
+      isLiveAI: false,
+    };
   }
 
   /**

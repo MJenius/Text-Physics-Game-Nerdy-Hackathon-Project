@@ -55,7 +55,8 @@ export type TelemetryEventType =
   | 'HOTSPOT_INSPECTED'
   | 'ARCHETYPE_COMMITTED'
   | 'DIRECTOR_SCENE_REDIRECT'
-  | 'ASYNC_AI_DIAGNOSIS_TRIGGERED';
+  | 'ASYNC_AI_DIAGNOSIS_TRIGGERED'
+  | 'AI_COMPILED_SCENARIO_LOADED';
 
 export interface TelemetryEvent {
   type: TelemetryEventType;

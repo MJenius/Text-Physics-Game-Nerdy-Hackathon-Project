@@ -53,6 +53,7 @@ export interface StoryDocument {
   keyClues?: string[];
   dateOrStamp?: string;
   isInspected?: boolean;
+  role?: 'event_timing' | 'physical_mechanism' | 'misleading_correlation' | 'confirmatory_evidence' | 'safety_constraint';
 }
 
 export interface Entity {

@@ -83,18 +83,24 @@ export interface ScenarioSpecification {
 export interface ScenarioValidationCheck {
   step:
     | 'schema_validation'
+    | 'world_compatibility'
+    | 'archetype_compatibility'
     | 'entity_validation'
+    | 'reference_closure'
     | 'fact_validation'
     | 'relation_validation'
+    | 'relation_consistency'
     | 'document_coverage'
     | 'action_legality'
     | 'state_transition_simulation'
     | 'reachability_search'
     | 'failure_recovery_validation'
     | 'evidence_alignment'
+    | 'completion_conditions'
     | 'answer_leakage_checks';
   passed: boolean;
   message?: string;
+  severity?: 'FATAL' | 'WARNING';
 }
 
 export interface ScenarioRejectionReport {
