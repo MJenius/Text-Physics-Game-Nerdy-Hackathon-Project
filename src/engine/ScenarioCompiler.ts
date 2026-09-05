@@ -139,26 +139,82 @@ export class ScenarioCompiler {
     // 4b. Reference Closure (Predicates, rule effects, condition targets, completion conditions)
     let referenceClosureValid = true;
     const knownEntityIds = new Set(Object.keys(registeredEntities));
+    const knownFactIds = new Set((spec.requiredFacts || []).map((f) => f.id));
     const allPredicates = [
       ...rules.flatMap((r) => r.conditions),
       ...completionConditions,
     ];
     for (const pred of allPredicates) {
       if (pred.type === 'STATE_IS' || pred.type === 'ENTITY_STATE') {
-        if (!knownEntityIds.has(pred.target)) {
+        if (!pred.target || !knownEntityIds.has(pred.target)) {
           referenceClosureValid = false;
-          errors.push(`Reference closure failure: predicate references unknown entity '${pred.target}'`);
+          errors.push(`Reference closure failure: predicate '${pred.type}' references unknown entity '${pred.target}'`);
+        }
+      } else if (pred.type === 'IN_INVENTORY' || pred.type === 'INVENTORY_HAS') {
+        if (!pred.target || (!knownEntityIds.has(pred.target) && pred.target.trim().length === 0)) {
+          referenceClosureValid = false;
+          errors.push(`Reference closure failure: inventory predicate references empty or unresolvable item target '${pred.target}'`);
+        }
+      } else if (pred.type === 'FACT_KNOWN') {
+        if (!pred.target || (knownFactIds.size > 0 && !knownFactIds.has(pred.target))) {
+          referenceClosureValid = false;
+          errors.push(`Reference closure failure: FACT_KNOWN predicate references unknown fact '${pred.target}'`);
+        }
+      } else if (
+        pred.type === 'FLAG_IS' ||
+        pred.type === 'DECISION_EQUALS' ||
+        pred.type === 'DECISION_IN' ||
+        pred.type === 'POWERED_HAS' ||
+        pred.type === 'RELATIONSHIP_AT_LEAST' ||
+        pred.type === 'HYPOTHESIS_CONFIRMED'
+      ) {
+        if (!pred.target || pred.target.trim().length === 0) {
+          referenceClosureValid = false;
+          errors.push(`Reference closure failure: predicate '${pred.type}' has empty or undefined target identifier`);
         }
       }
     }
-    for (const rule of rules) {
-      for (const eff of rule.onSuccess?.effects || []) {
-        if (eff.type === 'SET_ENTITY_STATE' && !knownEntityIds.has(eff.target)) {
+
+    // Comprehensive audit of all rule effects across onSuccess and onFailure
+    const allEffects = rules.flatMap((r) => [
+      ...(r.onSuccess?.effects || []),
+      ...(r.onFailure?.effects || []),
+    ]);
+
+    for (const eff of allEffects) {
+      if (eff.type === 'SET_ENTITY_STATE') {
+        if (!eff.target || !knownEntityIds.has(eff.target)) {
           referenceClosureValid = false;
           errors.push(`Reference closure failure: rule effect modifies unknown entity '${eff.target}'`);
         }
+      } else if (eff.type === 'ADD_INVENTORY' || eff.type === 'REMOVE_INVENTORY') {
+        if (!eff.target || eff.target.trim().length === 0) {
+          referenceClosureValid = false;
+          errors.push(`Reference closure failure: inventory effect '${eff.type}' has empty item identifier`);
+        }
+      } else if (eff.type === 'DISCOVER_FACT') {
+        const factTarget = (typeof eff.value === 'string' && eff.value) ? eff.value : eff.target;
+        if (!factTarget || (knownFactIds.size > 0 && !knownFactIds.has(factTarget))) {
+          referenceClosureValid = false;
+          errors.push(`Reference closure failure: DISCOVER_FACT effect references unknown fact '${factTarget}'`);
+        }
+      } else if (
+        eff.type === 'SET_FLAG' ||
+        eff.type === 'RECORD_DECISION' ||
+        eff.type === 'POWER_SYSTEM' ||
+        eff.type === 'MODIFY_RELATIONSHIP' ||
+        eff.type === 'ADD_HYPOTHESIS' ||
+        eff.type === 'CONFIRM_HYPOTHESIS' ||
+        eff.type === 'ADD_UNCERTAINTY' ||
+        eff.type === 'RESOLVE_UNCERTAINTY'
+      ) {
+        if (!eff.target || eff.target.trim().length === 0) {
+          referenceClosureValid = false;
+          errors.push(`Reference closure failure: rule effect '${eff.type}' has empty or undefined target identifier`);
+        }
       }
     }
+
     checks.push({
       step: 'reference_closure',
       passed: referenceClosureValid,
