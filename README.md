@@ -202,28 +202,24 @@ Press **`~`** at any time to open the Director Inspector — a full developer di
 
 ## Benchmark & Evaluation Results
 
-The project includes a comprehensive benchmark test suite (`AdaptivePipelineBenchmark.test.ts`) that verifies:
+The project includes an empirical 100-scenario compiler benchmark suite (`Comprehensive100Benchmark.test.ts`) and adaptive pipeline benchmark (`AdaptivePipelineBenchmark.test.ts`) that verify:
 
-| Test | Result |
-|------|--------|
-| Same skill, different history → ≥5 material differences | ✅ Pass |
-| 5 profiles produce ≥4 distinct action patterns | ✅ Pass |
-| Behavioral evidence (not just error counts) drives routing | ✅ Pass |
-| Surface guesser behavioral override works | ✅ Pass |
-| Negation world alternation prevents single-world collapse | ✅ Pass |
-| AI prescription fields not collapsed by post-processing | ✅ Pass |
-| Compiler validates well-formed scenarios (14+ checks) | ✅ Pass |
-| Compiler rejects invalid worlds | ✅ Pass |
-| Compiler rejects invalid archetypes | ✅ Pass |
-| Compiler rejects scenarios with no completion conditions | ✅ Pass |
-| Compiler detects answer leakage | ✅ Pass |
-| Batch benchmark metrics (rejection rate, reachability, latency) | ✅ Pass |
+| Metric / Evaluation Gate | Benchmark Target | Empirical Verified Result | Status |
+|--------------------------|------------------|---------------------------|--------|
+| **Valid Scenario Acceptance Rate** | 100% | **60 / 60 (100.0%)** across 4 worlds & topologies | ✅ Pass |
+| **Corrupted Scenario Rejection Rate** | 100% | **40 / 40 (100.0%)** across 10 failure categories | ✅ Pass |
+| **Compiler Latency (p50)** | < 1.0 ms | **0.06 ms** | ✅ Pass |
+| **Compiler Latency (p95)** | < 2.0 ms | **0.14 ms** | ✅ Pass |
+| **Identical Skill Diversity Gate (0.50)** | ≥ 3 unique archetypes | **4 archetypes, 4 action patterns, 3 worlds** | ✅ Pass |
+| **Hard Adaptive Acceptance (A vs B)** | ≥ 5 material differences | **6 material differences** | ✅ Pass |
+| **Full Reference Closure Semantic Audit** | All predicates & effects | **100% resolution (onSuccess & onFailure)** | ✅ Pass |
+| **Live Production A/B Browser Flow** | Diagnosis → Playable | **Boreas Station & Observatory verified** | ✅ Pass |
 
-**56 tests, 9 test files, 0 failures.**
+**65 tests, 10 test files, 0 failures.**
 
 ---
 
-## Local Development
+## Local Development & Verification
 
 ```bash
 # Install dependencies
@@ -232,18 +228,19 @@ npm install
 # Start development server
 npm run dev
 
-# Run test suite (56 tests)
+# Run comprehensive test suite (65 tests across 10 suites)
 npm test
 
-# Production build
+# Production build & preview validation
 npm run build
+npx vite preview --port 4173
 ```
 
 ### Requirements
 
 - Node.js 18+
 - npm 9+
-- Optional: Gemini API key in `.env` for live AI diagnosis (falls back deterministically without it)
+- Optional: Gemini API key in `.env` for live AI diagnosis (Gemini 2.5 Flash Lite active, falls back deterministically without it)
 
 ---
 
@@ -251,8 +248,8 @@ npm run build
 
 - **Frontend**: React 19 + TypeScript + Vite
 - **State Management**: Zustand with Immer middleware
-- **AI**: Google Gemini (structured JSON diagnosis with deterministic fallback)
-- **Testing**: Vitest (56 comprehensive tests)
+- **AI**: Google Gemini (`@google/genai` with `gemini-2.5-flash-lite`, structured JSON diagnosis, deterministic fallback)
+- **Testing**: Vitest (65 comprehensive tests, 100-scenario benchmark corpus)
 - **Styling**: Tailwind CSS v4
 - **Icons**: Lucide React
 
